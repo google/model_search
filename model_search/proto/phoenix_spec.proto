@@ -1,0 +1,361 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+// A config proto for the Phoenix Neural Architectural Search algorithm.
+// For more details please see:
+// https://docs.google.com/document/d/1hm3xxEZFsotRN9NxFeH20IByauSVmjAXVmsYzB3EZ9s/edit?ts=5bda0380#heading=h.gkyy6lxd46xo
+
+syntax = "proto2";
+
+package learning.adanets.phoenix.proto;
+
+import "model_search/proto/distillation_spec.proto";
+import "model_search/proto/ensembling_spec.proto";
+import "model_search/proto/hparam.proto";
+import "model_search/proto/transfer_learning_spec.proto";
+
+
+
+message LearningSpec {
+  // If true Phoenix will apply (step) exponential decay in some of the trials
+  // The number of steps can be specified in the fields below.
+  optional bool apply_exponential_decay = 1 [default = false];
+
+  // The minimal number of times to apply decay when applying learning
+  // rate exponential decay.
+  optional int32 min_decay_times = 2 [default = 1];
+
+  // The maximal number of times to apply decay when applying learning
+  // rate exponential decay.
+  optional int32 max_decay_times = 3 [default = 5];
+
+  // minimum rate for exponential learning rate decay
+  optional float min_learning_rate_decay_rate = 4 [default = 0.75];
+
+  // maximum rate for exponential learning rate decay
+  optional float max_learning_rate_decay_rate = 5 [default = 0.95];
+
+  // If true, The trials will apply gradient clipping.
+  optional bool apply_gradient_clipping = 6 [default = false];
+
+  // Minimal norm allowed when clipping.
+  optional int32 min_gradient_norm_when_clipping = 7 [default = 2];
+
+  // Maximal norm allowed when clipping.
+  optional int32 max_gradient_norm_when_clipping = 8 [default = 5];
+
+  // Allow l2 regularization on trainable variables.
+  optional bool apply_l2_regularization = 9 [default = false];
+
+  // Minimal rate (lambda) for the l2 regularization
+  optional float min_l2_regularization = 10 [default = 0];
+
+  // Maximal rate (lambda) for the l2 regularization
+  optional float max_l2_regularization = 11 [default = 0.05];
+
+  // Number of steps to warm up the learning rate
+  optional int32 lr_warmup_steps = 12 [default = 0];
+
+  // Minimum and maximum dropout allowed. The study will explore discretely
+  // between the minimum and the maximum over 10 different values.
+  optional float min_dropout = 13 [default = 0.1];
+  optional float max_dropout = 14 [default = 0.6];
+}
+
+// Next id: 3
+message TowerSuggestion {
+  // List of blocks to use in the architecture (stacked). Please use names
+  // (strings) defined in:
+  // model_search/blocks.py
+  repeated string architecture = 1;
+  // Ability to override additional hparams in the trial. Keep empty to rely
+  // on tuner hparams instead.
+  optional model_search.HParamDef hparams = 2;
+}
+
+// This message helps Phoenix to search for an architecture when we are
+// optimizing for multiple tasks.
+// The search is trying to find a good architecture for the shared model.
+// We will call the logits of the shared model (shared across the various tasks)
+// `search logits`. You can specify how to create `final logits` for the tasks
+// given the search logits. I.e., you can specify what blocks to add above the
+// shared model to the specific task - This addition is currently fixed and not
+// searchable.
+// Next id: 7
+message TaskSpec {
+  // required
+  // This name must match the name in the label dict in model_fn of estimator.
+  optional string label_name = 1;
+  // The number of classication classes - use 2 for binary classification.
+  optional int32 number_of_classes = 2 [default = 2];
+  // Additional blocks between the search logits and the final logits.
+  // Keep empty if you don't wish to add blocks between the final logits for the
+  // task and the search logits.
+  // A fully connected layer is added above the search logits if the dimension
+  // is not equal to the number of classes of the task.
+  repeated string architecture = 3;
+  // Feature name for the weight for the label.
+  optional string weight_feature_name = 4;
+  // True is weight feature is in feature dict, otherwise (if in label dict),
+  // False.
+  optional bool weight_is_a_feature = 5 [default = true];
+}
+
+// Parameters that apply only to the LinearModel search algorithm.
+message LinearModelSpec {
+  // Controls how to align variable-depth architectures such that all
+  // architectures can be encoded as a fixed-length feature vector input.
+  enum NetworkAlignment {
+    NET_ALIGN_UNSPECIFIED = 0;
+    // Networks will be aligned at the last layer before outputs.
+    NET_ALIGN_HEAD = 1;
+    // Networks will be aligned at the first layer after inputs.
+    NET_ALIGN_BASE = 2;
+  }
+  optional NetworkAlignment network_alignment = 1 [default = NET_ALIGN_HEAD];
+
+  // The L2 ridge regression penalty used to fit the linear model. Must be > 0.
+  optional float ridge_penalty = 2 [default = 0.001];
+
+  // Ignore very high-loss architectures.
+  // Performs asymmetric outlier removal: Trials with loss in the top 10% or
+  // with loss >= 10*median are removed. Huge loss == SGD diverged; remove.
+  // Low loss == good model; keep!
+  optional bool remove_outliers = 3 [default = true];
+
+  // With less than this many trials, just generate a random suggestion.
+  optional int32 trials_before_fit = 4 [default = 10];
+}
+
+
+// Next id: 2
+message ArchitectureReplay {
+  // Architecture of the various towers in the model.
+  repeated TowerSuggestion towers = 1;
+}
+
+// Next id: 49
+message PhoenixSpec {
+  enum SearchType {
+    UNKNOWN_SEARCH_TYPE = 0;
+    // Each trial will try to add, or modify one block from the best trial so
+    // far.
+    ADAPTIVE_COORDINATE_DESCENT = 1;
+    // Each trial will randomly choose blocks to construct the network.
+    NONADAPTIVE_RANDOM_SEARCH = 2;
+    // The harmonica search: https://arxiv.org/pdf/1706.00764.pdf
+    HARMONICA_SEARCH = 4;
+    // An extension of the coordinate descent algorithm which does not search
+    // over reduction blocks. Instead a reduction block is placed every
+    // num_blocks_in_cell. For example, if num_blocks_in_cell=4 then a reduction
+    // block will be added to the architecture after every 4 blocks.
+    // NOTE: Do not include reduction blocks in blocks_to_use otherwise we will
+    //   crash (e.g. pooling, downsample, reduction, flatten, etc.).
+    // NOTE: The following fields should be set if using this algorithm:
+    //   num_blocks_in_cell, reduction_block_type, replicate_cell.
+    CONSTRAINED_ADAPTIVE_COORDINATE_DESCENT = 6;
+    // Fit a linear model predicting accuracy from block binary feature vector.
+    // Then take the argmax of that model, and possibly increase depth.
+    LINEAR_MODEL = 7;
+  }
+
+  // Below this depth, Phoenix will fill with random blocks.
+  // This depth is also used for the non-adaptive search.
+  // I.e., all networks have fixed depth that is equal to minimum_depth.
+  optional int32 minimum_depth = 1 [default = 2];
+
+  // If you exceed this depth, we go to evolutionary mode. I.e., we mutate one
+  // block at a time.
+  optional int32 maximum_depth = 2 [default = 30];
+
+  // The type of search you would like.
+  optional SearchType search_type = 3;
+
+  // Submessage for SearchTypes that accept further configuration.
+  // Must be compatible with the value of search_type.
+  oneof search_spec {
+    LinearModelSpec linear_model = 43;
+  }
+
+  // The next 3 fields are only applicable for
+  // CONSTRAINED_ADAPTIVE_COORDINATE_DESCENT search.
+
+  // The number of blocks between reduction cells.
+  optional int32 num_blocks_in_cell = 40 [default = 4];
+
+  // The reduction block to use after each cell.
+  optional string reduction_block_type = 41
+      [default = "DOWNSAMPLE_CONVOLUTION_3X3"];
+
+  // Whether to only search for a cell which is then replicated n times until
+  // the size of the architecture is equal to maximum_depth. If this option is
+  // false, each cell will be search independently.
+  optional bool replicate_cell = 42 [default = false];
+
+  // To make it statistically significant, we set thresholds below which the
+  // algorithm cannot increase complexity (i.e., go deeper).
+  // Example: [10, 30, 50] -- The algorithm must complete 10 trials at depth 1
+  // to go to depth 2, and has to finish 30 trails to try depth 3 etc.
+  // If not set, the default is [5 * i for i in range(maximum_depth)]
+  repeated int32 increase_complexity_minimum_trials = 4;
+
+  // The probability that the architecture will grow deeper if there is enough
+  // capacity. With probability 1 - increase_complexity_probability,
+  // evolutionary mode will be run instead.
+  //
+  // Setting increase_complexity_probability < 1.0 increases exploration (this
+  // is in effect an epsilon-greedy exploration strategy) and could enable the
+  // search algorithm to get out of local minima.
+  optional float increase_complexity_probability = 32 [default = 1.0];
+
+  // The following three probabilities are only used
+  // in ADAPTIVE_COORDINATE_DESCENT_GENETIC.
+  // The probability to mutate a block.
+  optional float mutate_probability = 37 [default = 0.0];
+
+  // The probability of crossover. A new architecture is the result of mixing
+  // two of the best candidates.
+  optional float crossover_probability = 38 [default = 0.0];
+
+  // The probability of generating a random architecture.
+  optional float random_architecture_probability = 39 [default = 0.0];
+
+  // The number of best performing completed trials to to consider when
+  // increasing complexity (i.e. going deeper). E.g. if beam_size = 5, then the
+  // base for the new deeper tower will be randomly selected from the top 5
+  // completed trials. Must be >= 1.
+  optional int32 beam_size = 31 [default = 1];
+
+  // How does the input look like?
+  // Use DNN if you have many feature columns.
+  // Use CNN for plate tensors like images or speech (timeframes X freq. bands)
+  // Use RNN_ALL_ACTIVATIONS for language model like classification. I.e.,
+  // Assume a label for every input in the sequence. For one classification
+  // rnn (i.e., one label per sequence), use RNN_LAST_ACTIVATIONS
+  enum ProblemType {
+    UNKNOWN_PROBLEM_TYPE = 0;
+    CNN = 1;
+    DNN = 2;
+    RNN_ALL_ACTIVATIONS = 3;
+    RNN_LAST_ACTIVATIONS = 4;
+  }
+  // TODO(b/172564129): Find a way to figure this out from the head/dataset.
+  optional ProblemType problem_type = 5;
+
+  // List of blocks to use in the search. Please use names defined in:
+  // model_search/blocks.py
+  repeated string blocks_to_use = 6;
+
+  // User suggestions for architectures. These suggestions will be trained first
+  // Once trained, Phoenix will switch to its specified search algorithm.
+  // Restrictions:
+  // 1. If you intend to run Phoenix solely to train the user suggested
+  //    architectures, then there are no limitations.
+  // 2. If you are using a search algorithm after the user_suggestions (i.e.,
+  //    the number of max trials is greated than the length of this repeated
+  //    field), then your suggestions are going to be data points for the search
+  //    algorithm. Therefore, they must be compatible with the search; Namely,
+  //    if you are using HARMONICA_SEARCH or NONADAPTIVE_RANDOM_SEARCH, then
+  //    your suggestions must be of fixed depth since these algorithms work in a
+  //.   fixed depth space. The depth should
+  //    be equal to PhoenixSpec.minimum_depth.
+  // 3. If you are using ADAPTIVE_COORDINATE_DESCENT, this algorithm search over
+  //    dynamic depth architectures. No restriction applies.
+  repeated TowerSuggestion user_suggestions = 25;
+
+  // Fixes the architecture to a given one so that when replay is on, no search
+  // is performed. The phoenix returned
+  // estimator will always give the same architecture.
+  // When replay is on, there is no point to use parameterized_train_and_eval
+  // as replay also contains the hparams used to train every tower.
+  optional ArchitectureReplay replay = 47;
+
+
+  // Whether to scale how long a trial trains for based on the architecture
+  // size. If enabled, each extra block of an architecture adds
+  // max_train_steps / max_depth number of steps to the training. This only
+  // affects training when using mutation search.
+  optional bool use_parameter_scaled_training = 34;
+
+  // If provided, it means that the input function provided for Phoenix already
+  // created the lengths tensor for the recurrent problem. Phoenix, will use
+  // the provided lengths tensor and will assume, that we have only one
+  // sequential feature.
+  optional string lengths_feature_name = 23 [default = "lengths"];
+
+  // The name of the weight tensor in the features dict. Keep empty for no
+  // weights.
+  optional string weight_feature_name = 26;
+
+  // Apply dropout
+  optional bool apply_dropouts_between_blocks = 20;
+
+  // Spec for learning, e.g., apply_exponential_decay, etc.
+  optional LearningSpec learning_spec = 21;
+
+  // Specifies how to create an ensemble inside Phoenix.
+  // Ensembling is currently not supported for TPU (b/122906465).
+  optional ensembling_spec.EnsemblingSpec ensemble_spec = 22;
+
+  // Specifies how to distill the ensemble that Phoenix creates.
+  // If both a DistillationSpec and an EnsemblingSpec are provided, the
+  // DistillationSpec will be ignored.
+  // TODO(b/172564129): Integrate distillation with ensembling.
+  optional meta.proto.distillation_spec.DistillationSpec distillation_spec = 45;
+
+  // Use synchronous optimization across workers.
+  optional bool use_synchronous_optimizer = 24;
+
+  // Task spec for the various tasks.
+  // Please keep empty if you have one task.
+  // For more details, please see:
+  // https://docs.google.com/document/d/1J1sUVRP23pijXc8zLwHcWZNt0bKNuPZdES0oyni1wIU/edit#
+  repeated TaskSpec multi_task_spec = 27;
+  // The most important task when using multi_task_spec.
+  // The loss / prediction of estimator are going to be set to this label.
+  optional string primary_task_name = 28;
+
+  // NHWC or NCHW - only applies to cnn problems
+  optional string cnn_data_format = 30 [default = "NHWC"];
+
+  optional meta.proto.transfer_learning_spec.TransferLearningSpec
+      transfer_learning_spec = 33;
+
+  // TODO(b/172564129): Add the ability to specify a custom tower to use with
+  // the auxiliary head.
+  // Whether to use an auxiliary head for CNN tasks. If True, two kinds of
+  // auxiliary heads can be attached:
+  //   1. If the network contains a downsample or reduction block, the NASNet
+  //      auxiliary head will be attached right before the block.
+  //   2. If the network contains a flatten block which is not connected to the
+  //      logits, an auxiliary head will be attached to this flatten block.
+  // If neither of these two criteria hold, no auxiliary head will be attached.
+  optional bool use_auxiliary_head = 35;
+
+  // The weight to use for the auxiliary head loss. Must be in [0, 1.0]. The
+  // weight for the loss of the main head will be set to
+  // 1 - auxiliary_head_loss_weight.
+  optional float auxiliary_head_loss_weight = 36;
+
+  // If true, in case there is embedding feature column, we use the embedding
+  // once for all towers in Phoenix. Otherwise, we create different embedding
+  // for every tower. If in doubt, keep false.
+  optional bool is_input_shared = 46 [default = false];
+
+  // Temperature added to predict graph when exporting.
+  optional float temperature = 48 [default = 1.0];
+
+  // Deprecated tag numbers. Do not reuse.
+  reserved 8, 29;
+}

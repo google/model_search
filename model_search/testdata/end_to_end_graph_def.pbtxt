@@ -1,0 +1,1775 @@
+node {
+  name: "zeros/shape_as_tensor"
+  op: "Const"
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 4
+          }
+        }
+        tensor_content: "d\000\000\000 \000\000\000 \000\000\000\003\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "zeros/Const"
+  op: "Const"
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: 0.0
+      }
+    }
+  }
+}
+node {
+  name: "zeros"
+  op: "Fill"
+  input: "zeros/shape_as_tensor"
+  input: "zeros/Const"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "index_type"
+    value {
+      type: DT_INT32
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/shape"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 4
+          }
+        }
+        tensor_content: "\003\000\000\000\003\000\000\000\003\000\000\000\020\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/min"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: -0.187317162752
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/max"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: 0.187317162752
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/RandomUniform"
+  op: "RandomUniform"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/shape"
+  attr {
+    key: "T"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "seed"
+    value {
+      i: 87654321
+    }
+  }
+  attr {
+    key: "seed2"
+    value {
+      i: 6
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/sub"
+  op: "Sub"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/max"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/min"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/mul"
+  op: "Mul"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/RandomUniform"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/sub"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform"
+  op: "Add"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/mul"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform/min"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 3
+        }
+        dim {
+          size: 3
+        }
+        dim {
+          size: 3
+        }
+        dim {
+          size: 16
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Assign"
+  op: "Assign"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/Initializer/random_uniform"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/read"
+  op: "Identity"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias/Initializer/zeros"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+          dim {
+            size: 16
+          }
+        }
+        float_val: 0.0
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 16
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias/Assign"
+  op: "Assign"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias/Initializer/zeros"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias/read"
+  op: "Identity"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/dilation_rate"
+  op: "Const"
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 2
+          }
+        }
+        tensor_content: "\001\000\000\000\001\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/Conv2D"
+  op: "Conv2D"
+  input: "zeros"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel/read"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "data_format"
+    value {
+      s: "NHWC"
+    }
+  }
+  attr {
+    key: "dilations"
+    value {
+      list {
+        i: 1
+        i: 1
+        i: 1
+        i: 1
+      }
+    }
+  }
+  attr {
+    key: "padding"
+    value {
+      s: "SAME"
+    }
+  }
+  attr {
+    key: "strides"
+    value {
+      list {
+        i: 1
+        i: 1
+        i: 1
+        i: 1
+      }
+    }
+  }
+  attr {
+    key: "use_cudnn_on_gpu"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/BiasAdd"
+  op: "BiasAdd"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/Conv2D"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias/read"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "data_format"
+    value {
+      s: "NHWC"
+    }
+  }
+}
+node {
+  name: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/LeakyRelu"
+  op: "LeakyRelu"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/BiasAdd"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "alpha"
+    value {
+      f: 0.20000000298
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/shape"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 4
+          }
+        }
+        tensor_content: "\003\000\000\000\003\000\000\000\020\000\000\000@\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/min"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: -0.0912870913744
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/max"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: 0.0912870913744
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/RandomUniform"
+  op: "RandomUniform"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/shape"
+  attr {
+    key: "T"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "seed"
+    value {
+      i: 87654321
+    }
+  }
+  attr {
+    key: "seed2"
+    value {
+      i: 24
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/sub"
+  op: "Sub"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/max"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/min"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/mul"
+  op: "Mul"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/RandomUniform"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/sub"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform"
+  op: "Add"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/mul"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform/min"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 3
+        }
+        dim {
+          size: 3
+        }
+        dim {
+          size: 16
+        }
+        dim {
+          size: 64
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Assign"
+  op: "Assign"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/Initializer/random_uniform"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/read"
+  op: "Identity"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias/Initializer/zeros"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+          dim {
+            size: 64
+          }
+        }
+        float_val: 0.0
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 64
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias/Assign"
+  op: "Assign"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias/Initializer/zeros"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias/read"
+  op: "Identity"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/dilation_rate"
+  op: "Const"
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 2
+          }
+        }
+        tensor_content: "\001\000\000\000\001\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/Conv2D"
+  op: "Conv2D"
+  input: "Phoenix/1_FIXED_CHANNEL_CONVOLUTION_16_1/LeakyRelu"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel/read"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "data_format"
+    value {
+      s: "NHWC"
+    }
+  }
+  attr {
+    key: "dilations"
+    value {
+      list {
+        i: 1
+        i: 1
+        i: 1
+        i: 1
+      }
+    }
+  }
+  attr {
+    key: "padding"
+    value {
+      s: "SAME"
+    }
+  }
+  attr {
+    key: "strides"
+    value {
+      list {
+        i: 1
+        i: 1
+        i: 1
+        i: 1
+      }
+    }
+  }
+  attr {
+    key: "use_cudnn_on_gpu"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/BiasAdd"
+  op: "BiasAdd"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/Conv2D"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias/read"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "data_format"
+    value {
+      s: "NHWC"
+    }
+  }
+}
+node {
+  name: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/LeakyRelu"
+  op: "LeakyRelu"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/BiasAdd"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "alpha"
+    value {
+      f: 0.20000000298
+    }
+  }
+}
+node {
+  name: "Phoenix/3_PLATE_REDUCTION_FLATTEN_1334/Mean/reduction_indices"
+  op: "Const"
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 2
+          }
+        }
+        tensor_content: "\001\000\000\000\002\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "Phoenix/3_PLATE_REDUCTION_FLATTEN_1334/Mean"
+  op: "Mean"
+  input: "Phoenix/2_FIXED_CHANNEL_CONVOLUTION_64_13/LeakyRelu"
+  input: "Phoenix/3_PLATE_REDUCTION_FLATTEN_1334/Mean/reduction_indices"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "Tidx"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "keep_dims"
+    value {
+      b: false
+    }
+  }
+}
+node {
+  name: "architecture/Initializer/Const"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@architecture"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 3
+          }
+        }
+        tensor_content: "\001\000\000\000\003\000\000\000\"\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "architecture"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@architecture"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 3
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "architecture/Assign"
+  op: "Assign"
+  input: "architecture"
+  input: "architecture/Initializer/Const"
+  attr {
+    key: "T"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@architecture"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "architecture/read"
+  op: "Identity"
+  input: "architecture"
+  attr {
+    key: "T"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@architecture"
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform/shape"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_INT32
+        tensor_shape {
+          dim {
+            size: 2
+          }
+        }
+        tensor_content: "@\000\000\000\n\000\000\000"
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform/min"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: -0.284747391939
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform/max"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+        }
+        float_val: 0.284747391939
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform/RandomUniform"
+  op: "RandomUniform"
+  input: "dense/kernel/Initializer/random_uniform/shape"
+  attr {
+    key: "T"
+    value {
+      type: DT_INT32
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "seed"
+    value {
+      i: 87654321
+    }
+  }
+  attr {
+    key: "seed2"
+    value {
+      i: 48
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform/sub"
+  op: "Sub"
+  input: "dense/kernel/Initializer/random_uniform/max"
+  input: "dense/kernel/Initializer/random_uniform/min"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform/mul"
+  op: "Mul"
+  input: "dense/kernel/Initializer/random_uniform/RandomUniform"
+  input: "dense/kernel/Initializer/random_uniform/sub"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel/Initializer/random_uniform"
+  op: "Add"
+  input: "dense/kernel/Initializer/random_uniform/mul"
+  input: "dense/kernel/Initializer/random_uniform/min"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "dense/kernel"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 64
+        }
+        dim {
+          size: 10
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "dense/kernel/Assign"
+  op: "Assign"
+  input: "dense/kernel"
+  input: "dense/kernel/Initializer/random_uniform"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "dense/kernel/read"
+  op: "Identity"
+  input: "dense/kernel"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/kernel"
+      }
+    }
+  }
+}
+node {
+  name: "dense/bias/Initializer/zeros"
+  op: "Const"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/bias"
+      }
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "value"
+    value {
+      tensor {
+        dtype: DT_FLOAT
+        tensor_shape {
+          dim {
+            size: 10
+          }
+        }
+        float_val: 0.0
+      }
+    }
+  }
+}
+node {
+  name: "dense/bias"
+  op: "VariableV2"
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/bias"
+      }
+    }
+  }
+  attr {
+    key: "allowed_devices"
+    value {
+      list: {}
+    }
+  }
+  attr {
+    key: "container"
+    value {
+      s: ""
+    }
+  }
+  attr {
+    key: "dtype"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "shape"
+    value {
+      shape {
+        dim {
+          size: 10
+        }
+      }
+    }
+  }
+  attr {
+    key: "shared_name"
+    value {
+      s: ""
+    }
+  }
+}
+node {
+  name: "dense/bias/Assign"
+  op: "Assign"
+  input: "dense/bias"
+  input: "dense/bias/Initializer/zeros"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/bias"
+      }
+    }
+  }
+  attr {
+    key: "use_locking"
+    value {
+      b: true
+    }
+  }
+  attr {
+    key: "validate_shape"
+    value {
+      b: true
+    }
+  }
+}
+node {
+  name: "dense/bias/read"
+  op: "Identity"
+  input: "dense/bias"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "_class"
+    value {
+      list {
+        s: "loc:@dense/bias"
+      }
+    }
+  }
+}
+node {
+  name: "dense/MatMul"
+  op: "MatMul"
+  input: "Phoenix/3_PLATE_REDUCTION_FLATTEN_1334/Mean"
+  input: "dense/kernel/read"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "transpose_a"
+    value {
+      b: false
+    }
+  }
+  attr {
+    key: "transpose_b"
+    value {
+      b: false
+    }
+  }
+}
+node {
+  name: "dense/BiasAdd"
+  op: "BiasAdd"
+  input: "dense/MatMul"
+  input: "dense/bias/read"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+  attr {
+    key: "data_format"
+    value {
+      s: "NHWC"
+    }
+  }
+}
+node {
+  name: "logits"
+  op: "Identity"
+  input: "dense/BiasAdd"
+  attr {
+    key: "T"
+    value {
+      type: DT_FLOAT
+    }
+  }
+}

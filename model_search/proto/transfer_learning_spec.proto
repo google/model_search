@@ -1,0 +1,80 @@
+// Copyright 2020 Google LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+
+package learning.adanets.phoenix.meta.proto.transfer_learning_spec;
+
+
+
+// Specifies Phoenix TransferLearning options.
+message TransferLearningSpec {
+  // TODO(b/172564129): Unify snapshotting into the rest of the TL framework.
+  // The type of transfer learning to apply when starting a new trial.
+  //
+  // Internally, the transfer learning has two different implementations. When
+  // warm starting from the previous iteration only (i.e.
+  // SNAPSHOT_TRANSFER_LEARNING) we use tf.train.init_from_checkpoint. However,
+  // when warm starting from a uniform average of all previously completed
+  // trials (i.e. UNIFORM_AVERAGE_TRANSFER_LEARNING) this option is not
+  // available to us. Instead, we iterate over all the checkpoints and warm
+  // start the variables manually. Unlike the snapshotting case, this process is
+  // done in a SessionRunHook.
+  enum TransferLearningType {
+    // Never valid.
+    UNKNOWN_TRANSFER_LEARNING_TYPE = 0;
+
+    // Variables of the new trial will be initialized to defaults (e.g. random).
+    NO_TRANSFER_LEARNING = 1;
+
+    // Variables of the new trial will be warm started using a uniform average
+    // of the completed trials.
+    UNIFORM_AVERAGE_TRANSFER_LEARNING = 2;
+
+    // Variables of the new trial will be warm started by copying over the
+    // variables from the previous trial.
+    //
+    // Known behavior: If snapshotting is applied with fast termination, the
+    // system tends to favor mutation of the higher (closer to logits) blocks
+    // because most of the tower is already trained.
+    SNAPSHOT_TRANSFER_LEARNING = 3;
+
+    // Variables of the new trial will be warm started using a loss weighted
+    // average of the previous completed trials. Trials with lower loss will
+    // have a bigger impact on the transferred variables.
+    LOSS_WEIGHTED_AVERAGE_TRANSFER_LEARNING = 4;
+  }
+  optional TransferLearningType transfer_learning_type = 1;
+
+  // A discount factor for the variables of previous trials. E.g. if current
+  // trial is n, and previous trial is k, then the variables W of trial k will
+  // be weighted as W * previous_trials_discount_factor^(n-k).
+  //
+  // Note that a discount factor can be applied to all TransferLearningTypes
+  // except for SNAPSHOT_TRANSFER_LEARNING. When used with
+  // UNIFORM_AVERAGE_TRANSFER_LEARNING this is equivalent to exponential
+  // weighted average.
+  //
+  // This approach could allow the search to get out of strong local minima,
+  // especially when using LOSS_WEIGHTED_AVERAGE_TRANSFER_LEARNING by
+  // discounting strong, but old, trials.
+  optional float previous_trials_discount_factor = 2 [default = 1.0];
+
+  // The maximum number of completed trials to consider when transfer learning
+  // for the current trial. All trials are first sorted based on a metric
+  // defined by the transfer learning type, then only the top
+  // max_completed_trials are considered. If not specified, all trials are
+  // considered.
+  optional int32 max_completed_trials = 3 [default = 1000000];
+}

@@ -1,0 +1,52 @@
+minimum_depth: 1
+maximum_depth: 5
+problem_type: DNN
+
+search_type: ADAPTIVE_COORDINATE_DESCENT
+
+blocks_to_use: "FIXED_OUTPUT_FULLY_CONNECTED_128"
+blocks_to_use: "FIXED_OUTPUT_FULLY_CONNECTED_256"
+blocks_to_use: "FIXED_OUTPUT_FULLY_CONNECTED_512"
+blocks_to_use: "FIXED_OUTPUT_FULLY_CONNECTED_1024"
+blocks_to_use: "FULLY_CONNECTED_RESIDUAL_FORCE_MATCH_SHAPES"
+blocks_to_use: "FULLY_CONNECTED_RESIDUAL_FORCE_MATCH_SHAPES_BATCHNORM"
+blocks_to_use: "FULLY_CONNECTED_RESIDUAL_CONCAT"
+blocks_to_use: "FULLY_CONNECTED_RESIDUAL_CONCAT_BATCHNORM"
+blocks_to_use: "FULLY_CONNECTED_RESIDUAL_PROJECT"
+blocks_to_use: "FULLY_CONNECTED_RESIDUAL_PROJECT_BATCHNORM"
+blocks_to_use: "FULLY_CONNECTED_PYRAMID"
+blocks_to_use: "LOWRANK_1"
+blocks_to_use: "LOWRANK_2"
+blocks_to_use: "LOWRANK_3"
+blocks_to_use: "LOWRANK_1_SKIP"
+blocks_to_use: "LOWRANK_2_SKIP"
+blocks_to_use: "LOWRANK_3_SKIP"
+blocks_to_use: "BOTTLENECK_32"
+blocks_to_use: "BOTTLENECK_64"
+blocks_to_use: "BOTTLENECK_32_SKIP"
+blocks_to_use: "BOTTLENECK_64_SKIP"
+
+apply_dropouts_between_blocks: true
+
+beam_size: 5
+increase_complexity_probability: 0.9
+
+learning_spec {
+  apply_exponential_decay: true
+  apply_gradient_clipping: true
+  apply_l2_regularization: false
+}
+
+ensemble_spec {
+  combining_type: AVERAGE_ENSEMBLE
+  ensemble_search_type: INTERMIXED_NONADAPTIVE_ENSEMBLE_SEARCH
+  intermixed_search {
+    width: 3
+    try_ensembling_every: 5
+    num_trials_to_consider: 15
+  }
+}
+
+distillation_spec {
+  distillation_type: ADAPTIVELY_BALANCE_LOSSES
+}

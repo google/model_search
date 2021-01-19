@@ -1,0 +1,46 @@
+minimum_depth: 1
+maximum_depth: 4
+
+problem_type: RNN_LAST_ACTIVATIONS
+
+search_type: ADAPTIVE_COORDINATE_DESCENT
+
+blocks_to_use: "RNN_CELL_64"
+blocks_to_use: "RNN_CELL_128"
+blocks_to_use: "RNN_CELL_256"
+blocks_to_use: "RNN_CELL_512"
+blocks_to_use: "RNN_CELL_1024"
+blocks_to_use: "RECURRENT_DENSE_64"
+blocks_to_use: "RECURRENT_DENSE_128"
+blocks_to_use: "RECURRENT_DENSE_256"
+blocks_to_use: "RECURRENT_DENSE_512"
+blocks_to_use: "RECURRENT_DENSE_1024"
+blocks_to_use: "SVDF_CELL_64_4_1"
+blocks_to_use: "SVDF_CELL_128_4_1"
+blocks_to_use: "SVDF_CELL_256_4_1"
+blocks_to_use: "SVDF_CELL_512_4_1"
+blocks_to_use: "SVDF_CELL_1024_4_1"
+blocks_to_use: "SVDF_CELL_64_8_1"
+blocks_to_use: "SVDF_CELL_128_8_1"
+blocks_to_use: "SVDF_CELL_256_8_1"
+blocks_to_use: "SVDF_CELL_512_8_1"
+blocks_to_use: "SVDF_CELL_1024_8_1"
+blocks_to_use: "SVDF_CELL_64_16_1"
+blocks_to_use: "SVDF_CELL_128_16_1"
+blocks_to_use: "SVDF_CELL_256_16_1"
+blocks_to_use: "SVDF_CELL_512_16_1"
+blocks_to_use: "SVDF_CELL_1024_16_1"
+blocks_to_use: "LSTM_128"
+blocks_to_use: "LSTM_256"
+blocks_to_use: "LSTM_512"
+blocks_to_use: "LSTM_1024"
+
+learning_spec {
+  apply_exponential_decay: true
+
+  apply_gradient_clipping: true
+
+  apply_l2_regularization: false
+}
+
+apply_dropouts_between_blocks: true
