@@ -32,6 +32,7 @@ Below is a code snippet for doing so:
 
 ```python
 import model_search
+from model_search import constants
 from model_search import single_trainer
 from model_search.data import csv_data
 
@@ -41,7 +42,7 @@ trainer = single_trainer.SingleTrainer(
         logits_dimension=2,
         record_defaults=[0, 0, 0, 0],
         filename="model_search/data/testdata/csv_random_data.csv")),
-    spec=model_search.constants.DEFAULT_DNN)
+    spec=constants.DEFAULT_DNN)
 
 trainer.try_models(
     number_models=200,

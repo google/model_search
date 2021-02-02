@@ -1,0 +1,8 @@
+six==1.15.0
+sklearn==0.0
+tensorflow==2.2.0
+absl-py==0.10.0
+tf-slim==1.1.0
+ml-metadata==0.26.0
+keras-tuner==1.0.2
+mock==4.0.3
