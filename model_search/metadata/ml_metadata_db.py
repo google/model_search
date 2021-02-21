@@ -15,6 +15,7 @@
 
 import json
 import os
+import sys
 import random
 from absl import flags
 from absl import logging
@@ -50,7 +51,7 @@ flags.DEFINE_string(
     "config with this password is established.")
 
 FLAGS = flags.FLAGS
-
+FLAGS(sys.argv)
 
 class MLMetaData(metadata.MetaData):
   """An object which handles communicating with metadata db through MLMD."""
