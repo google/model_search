@@ -59,7 +59,8 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
       if not self._phoenix_spec.HasField("replay"):
         self._metadata.unblock_stopped_infeasible_trial(my_id)
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def generator_name(self):
     """The name of the generator."""
 
