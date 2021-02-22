@@ -47,7 +47,7 @@ def _create_spec(replay_towers=0, ensemble_type="none"):
   return output
 
 
-_TRIALS = [trial_module.Trial({"id": id + 1}) for id in range(105)]
+_TRIALS = [trial_module.Trial({"id": id_ + 1}) for id_ in range(105)]
 
 
 def _create_trials(num_trials):
