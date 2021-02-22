@@ -104,6 +104,7 @@ class SvdfConvLayer(tf.keras.layers.Layer):
     self.dropout = min(1., max(0., dropout))
     self.num_filters = self.rank * self.units
     self._dropout_mask = None
+    self.num_features = None
     self.feature_kernel = []
     self.time_kernel = []
     self.bias = []
