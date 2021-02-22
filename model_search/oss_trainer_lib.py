@@ -170,7 +170,7 @@ def loss_and_metric_and_predictions_fn(provider):
   if getattr(provider, "get_predictions_fn", None) is not None:
     predictions_fn = provider.get_predictions_fn()
 
-  return (loss_fn, metric_fn, predictions_fn)
+  return loss_fn, metric_fn, predictions_fn
 
 
 def make_run_config(model_dir=None, use_tpu=False):
