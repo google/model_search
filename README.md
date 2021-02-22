@@ -41,7 +41,7 @@ trainer = single_trainer.SingleTrainer(
         label_index=0,
         logits_dimension=2,
         record_defaults=[0, 0, 0, 0],
-        filename="model_search/data/testdata/csv_random_data.csv")),
+        filename="model_search/data/testdata/csv_random_data.csv"),
     spec=constants.DEFAULT_DNN)
 
 trainer.try_models(
