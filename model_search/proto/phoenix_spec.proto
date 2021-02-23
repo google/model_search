@@ -13,8 +13,6 @@
 // limitations under the License.
 
 // A config proto for the Phoenix Neural Architectural Search algorithm.
-// For more details please see:
-// https://docs.google.com/document/d/1hm3xxEZFsotRN9NxFeH20IByauSVmjAXVmsYzB3EZ9s/edit?ts=5bda0380#heading=h.gkyy6lxd46xo
 
 syntax = "proto2";
 
@@ -319,8 +317,6 @@ message PhoenixSpec {
 
   // Task spec for the various tasks.
   // Please keep empty if you have one task.
-  // For more details, please see:
-  // https://docs.google.com/document/d/1J1sUVRP23pijXc8zLwHcWZNt0bKNuPZdES0oyni1wIU/edit#
   repeated TaskSpec multi_task_spec = 27;
   // The most important task when using multi_task_spec.
   // The loss / prediction of estimator are going to be set to this label.
