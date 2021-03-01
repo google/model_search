@@ -1,4 +1,4 @@
-# How to Contribute //my fst change here //and second one
+# How to Contribute //my fst change here //and second one  //and the last one
 
 We'd love to accept your patches and contributions to this project. There are
 just a few small guidelines you need to follow.
