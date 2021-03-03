@@ -18,7 +18,7 @@
 """Well known building blocks for Convolutional networks."""
 
 import abc
-
+import math
 import enum
 import functools
 
