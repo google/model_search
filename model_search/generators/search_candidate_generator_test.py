@@ -129,6 +129,9 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
       input_tensor = tf.zeros([100, 32, 32, 3])
       phoenix_spec = phoenix_spec_pb2.PhoenixSpec(
           problem_type=phoenix_spec_pb2.PhoenixSpec.CNN)
+      dirname = os.path.join(flags.FLAGS.test_tmpdir, str(trial_id))
+      if dirname and not tf.io.gfile.exists(dirname):
+        tf.io.gfile.makedirs(dirname)
       for tower in towers:
         _ = architecture_utils.construct_tower(
             phoenix_spec=phoenix_spec,
@@ -138,6 +141,8 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
             is_training=True,
             lengths=None,
             logits_dimension=10,
+            hparams=hp.HParams(),
+            model_directory=dirname,
             is_frozen=False,
             dropout_rate=None)
         architecture_utils.set_number_of_towers(tower, 1)
@@ -350,6 +355,8 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
                                            ['model_dir', 'is_chief'])
       run_config = fake_config(
           model_dir=flags.FLAGS.test_tmpdir + '/10000', is_chief=True)
+      tf.io.gfile.makedirs(run_config.model_dir)
+
       self._create_checkpoint(['search_generator'], 2)
       self._create_checkpoint(['search_generator'], 3)
       self._create_checkpoint(['search_generator'], 5)

@@ -34,6 +34,7 @@ py_test(
         ":trial_utils",
         "//model_search/proto:all_proto_py_pb2",
         "@absl_py//absl/testing:parameterized",
+        "//model_search:hparam",
         "//model_search/architecture:architecture_utils",
         "//model_search/metadata:ml_metadata_db",
         "//model_search/metadata:trial",

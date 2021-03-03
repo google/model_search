@@ -23,6 +23,7 @@ import enum
 
 from model_search import blocks
 from model_search import registry
+from model_search.hparams import hyperparameters as ms_hparameters
 
 
 enum_dict = registry.get_base_enum(blocks.Block)
@@ -52,3 +53,18 @@ class Blocks(object):
 
   def __getitem__(self, block_type):
     return self._block_builders[block_type]
+
+  @staticmethod
+  def search_space(blocks_to_use=None):
+    """Returns required search space for all blocks."""
+    search_space = ms_hparameters.Hyperparameters()
+    for block_type in BlockType:
+      if block_type == BlockType.EMPTY_BLOCK:
+        continue
+      if blocks_to_use is None or block_type.name in blocks_to_use:
+        target = registry.lookup(block_type.name, blocks.Block)
+        hps = target.requires_hparams()
+        if hps:
+          search_space.merge(hps, name_prefix=(block_type.name + '_'))
+
+    return search_space

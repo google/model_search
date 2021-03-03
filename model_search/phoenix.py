@@ -463,6 +463,7 @@ class Phoenix(object):
           mode=mode,
           lengths=shared_lengths,
           loss_fn=self._get_loss_fn(features, mode, my_id, teacher_logits),
+          model_directory=run_config.model_dir,
           predictions_fn=self._predictions_fn)
 
       if run_config.is_chief:
@@ -641,6 +642,8 @@ class Phoenix(object):
   def get_keras_hyperparameters_space(phoenix_spec, train_steps):
     """Gets the Phoenix search space as keras Hyperparameters object."""
     hp_space = kerastuner.engine.hyperparameters.HyperParameters()
+    hp_space.merge(
+        architecture_utils.get_blocks_search_space(phoenix_spec.blocks_to_use))
     hp_space.Float("learning_rate", 1e-6, 0.01, sampling="log")
     hp_space.Choice("new_block_type", phoenix_spec.blocks_to_use)
 

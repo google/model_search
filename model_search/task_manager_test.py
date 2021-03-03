@@ -109,6 +109,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
           labels=tf.ones([20], dtype=tf.int32),
           loss_fn=loss_fn,
           mode=tf.estimator.ModeKeys.TRAIN,
+          model_directory=self.get_temp_dir(),
           lengths=None,
           use_tpu=False,
           predictions_fn=_default_predictions_fn)
@@ -174,6 +175,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
         eval_logits_spec=logits_spec,
         labels=tf.ones([20], dtype=tf.int32),
         loss_fn=loss_fn,
+        model_directory=self.get_temp_dir(),
         mode=tf.estimator.ModeKeys.EVAL,
         lengths=None,
         use_tpu=False,
@@ -237,6 +239,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
         labels=tf.ones([20], dtype=tf.int32),
         loss_fn=loss_fn,
         mode=tf.estimator.ModeKeys.PREDICT,
+        model_directory=self.get_temp_dir(),
         lengths=None,
         use_tpu=False,
         predictions_fn=_default_predictions_fn)
@@ -270,6 +273,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
           train_logits_specs=[logits_spec],
           eval_logits_spec=logits_spec,
           labels=tf.ones([20], dtype=tf.int32),
+          model_directory=self.get_temp_dir(),
           loss_fn=loss_fn,
           mode=tf.estimator.ModeKeys.TRAIN,
           lengths=None,
@@ -356,6 +360,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
               'label2': tf.ones([20], dtype=tf.int32)
           },
           loss_fn=loss_fn,
+          model_directory=self.get_temp_dir(),
           mode=tf.estimator.ModeKeys.TRAIN,
           lengths=None,
           use_tpu=False,
@@ -452,6 +457,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
           eval_logits_spec=logits_spec,
           labels=labels,
           loss_fn=loss_fn,
+          model_directory=self.get_temp_dir(),
           mode=tf.estimator.ModeKeys.TRAIN,
           lengths=None,
           use_tpu=False,
@@ -517,6 +523,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
           eval_logits_spec=logits_spec,
           labels=labels,
           loss_fn=loss_fn,
+          model_directory=self.get_temp_dir(),
           mode=tf.estimator.ModeKeys.TRAIN,
           lengths=None,
           use_tpu=False,
@@ -558,6 +565,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
               'label2': tf.ones([20], dtype=tf.int32)
           },
           loss_fn=loss_fn,
+          model_directory=self.get_temp_dir(),
           mode=tf.estimator.ModeKeys.TRAIN,
           lengths=None,
           use_tpu=False,
@@ -614,6 +622,7 @@ class TaskManagerTest(parameterized.TestCase, tf.test.TestCase):
               'label2': tf.ones([20], dtype=tf.int32)
           },
           loss_fn=_loss_fn,
+          model_directory=self.get_temp_dir(),
           mode=tf.estimator.ModeKeys.TRAIN,
           lengths=None,
           use_tpu=False,

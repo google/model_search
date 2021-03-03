@@ -271,6 +271,7 @@ class TaskManager(object):
                         mode,
                         lengths,
                         loss_fn,
+                        model_directory,
                         predictions_fn,
                         optimizer_fn=None):
     """Creates model spec for all tasks."""
@@ -368,6 +369,8 @@ class TaskManager(object):
             architecture=np.array(tower_architecture),
             is_training=is_training,
             lengths=lengths,
+            hparams=params,
+            model_directory=model_directory,
             logits_dimension=task_spec.number_of_classes,
             is_frozen=False,
             # TODO(b/172564129): add dropouts.

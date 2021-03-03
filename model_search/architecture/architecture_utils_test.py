@@ -18,6 +18,7 @@
 from absl.testing import parameterized
 
 from model_search import blocks_builder as blocks
+from model_search import hparam as hp
 from model_search.architecture import architecture_utils
 from model_search.metadata import trial
 from model_search.proto import phoenix_spec_pb2
@@ -48,6 +49,32 @@ def _replay_spec():
 
 
 class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
+
+  def test_get_blocks_search_space(self):
+    hps = architecture_utils.get_blocks_search_space()
+    self.assertIn("TUNABLE_SVDF_output_size", hps)
+    self.assertIn("TUNABLE_SVDF_rank", hps)
+    self.assertIn("TUNABLE_SVDF_projection_size", hps)
+    self.assertIn("TUNABLE_SVDF_memory_size", hps)
+    hps = architecture_utils.get_blocks_search_space(["TUNABLE_SVDF"])
+    self.assertIn("TUNABLE_SVDF_output_size", hps)
+    self.assertIn("TUNABLE_SVDF_rank", hps)
+    self.assertIn("TUNABLE_SVDF_projection_size", hps)
+    self.assertIn("TUNABLE_SVDF_memory_size", hps)
+
+  def test_get_block_hparams(self):
+    hp_ = architecture_utils.get_block_hparams(
+        hp.HParams(TUNABLE_SVDF_target=10, non_target=15), "TUNABLE_SVDF")
+    self.assertLen(hp_.values(), 1)
+    self.assertEqual(hp_.target, 10)
+
+  def test_store_and_get_hparams(self):
+    hp_ = hp.HParams(hello="world", context="toberemoved")
+    dirname = self.get_temp_dir()
+    architecture_utils.store_hparams_to_dir(hp_, dirname, "tower")
+    hp_replica = architecture_utils.get_hparams_from_dir(dirname, "tower")
+    self.assertLen(hp_replica.values(), 1)
+    self.assertEqual(hp_replica.hello, "world")
 
   @parameterized.named_parameters(
       {
@@ -262,6 +289,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
           is_training=True,
           lengths=None,
           logits_dimension=10,
+          hparams=hp.HParams(),
+          model_directory=self.get_temp_dir(),
           is_frozen=False,
           dropout_rate=dropout)
       np.random.seed(42)
@@ -313,6 +342,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
         is_training=True,
         lengths=None,
         logits_dimension=10,
+        hparams=hp.HParams(),
+        model_directory=self.get_temp_dir(),
         is_frozen=False,
         dropout_rate=None)
     tensors = architecture_utils.get_tower_variables(tower_name)
@@ -355,6 +386,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
             is_training=True,
             lengths=None,
             logits_dimension=10,
+            hparams=hp.HParams(),
+            model_directory=self.get_temp_dir(),
             is_frozen=False,
             dropout_rate=None)
         saver = tf.compat.v1.train.Saver()
@@ -397,6 +430,7 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
             original_tower_name="test_tower",
             new_tower_name="imported_tower",
             model_directory=directory,
+            new_model_directory=self.get_temp_dir(),
             is_training=True,
             logits_dimension=10,
             shared_lengths=None,
@@ -596,6 +630,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
             is_training=True,
             lengths=None,
             logits_dimension=10,
+            model_directory=self.get_temp_dir(),
+            hparams=hp.HParams(),
             is_frozen=False,
             dropout_rate=None)
         saver = tf.compat.v1.train.Saver()
@@ -613,6 +649,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
             is_training=True,
             lengths=None,
             logits_dimension=10,
+            hparams=hp.HParams(),
+            model_directory=self.get_temp_dir(),
             is_frozen=False,
             dropout_rate=None)
         snapshotting_variables = architecture_utils.init_variables(

@@ -32,6 +32,34 @@ class BlocksBuilderTest(tf.test.TestCase):
         continue
       blocks[block_type]  # pylint: disable=pointless-statement
 
+  def test_blocks_search_space(self):
+    hps = blocks_builder.Blocks.search_space()
+    self.assertIn("TUNABLE_SVDF_output_size", hps)
+    self.assertIn("TUNABLE_SVDF_rank", hps)
+    self.assertIn("TUNABLE_SVDF_projection_size", hps)
+    self.assertIn("TUNABLE_SVDF_memory_size", hps)
+    hps = blocks_builder.Blocks.search_space(["TUNABLE_SVDF"])
+    self.assertIn("TUNABLE_SVDF_output_size", hps)
+    self.assertIn("TUNABLE_SVDF_rank", hps)
+    self.assertIn("TUNABLE_SVDF_projection_size", hps)
+    self.assertIn("TUNABLE_SVDF_memory_size", hps)
+
+  def test_naming_of_tunable(self):
+    # If this test is failing, it is because the user have registered two
+    # tunable blocks with names that substrings of one another.
+    blocks = blocks_builder.Blocks()
+    names = []
+    for k, v in blocks._block_builders.items():
+      if v is not None:
+        hps = v.requires_hparams()
+        if hps:
+          names.append(k)
+
+    for idx, name in enumerate(names):
+      for idx2, name2 in enumerate(names):
+        if idx != idx2:
+          self.assertNotStartsWith(name, name2)
+
 
 if __name__ == "__main__":
   tf.enable_v2_behavior()

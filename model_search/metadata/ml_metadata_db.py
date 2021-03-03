@@ -80,13 +80,18 @@ class MLMetaData(metadata.MetaData):
     self._optimization_metric = optimization_metric
 
     self._connection_config = connection_config
+    if not FLAGS.is_parsed():
+      logging.error("Flags are not parsed. Using default in file mlmd database."
+                    " Please run main with absl.app.run(main) to fix this. "
+                    "If running in distributed mode, this means that the "
+                    "trainers are not sharing information between one another.")
     if self._connection_config is None:
-      if FLAGS.mlmd_default_sqllite_filename:
+      if FLAGS.is_parsed() and FLAGS.mlmd_default_sqllite_filename:
         self._connection_config = metadata_store_pb2.ConnectionConfig()
         self._connection_config.sqlite.filename_uri = (
             FLAGS.mlmd_default_sqllite_filename)
         self._connection_config.sqlite.connection_mode = 3
-      elif FLAGS.mlmd_socket:
+      elif FLAGS.is_parsed() and FLAGS.mlmd_socket:
         self._connection_config = metadata_store_pb2.ConnectionConfig()
         self._connection_config.mysql.socket = FLAGS.mlmd_socket
         self._connection_config.mysql.database = FLAGS.mlmd_database

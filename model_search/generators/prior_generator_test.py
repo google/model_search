@@ -20,6 +20,7 @@ import os
 from absl import flags
 from absl.testing import parameterized
 
+from model_search import hparam as hp
 from model_search.architecture import architecture_utils
 from model_search.generators import prior_generator
 from model_search.generators import trial_utils
@@ -169,6 +170,9 @@ class PriorGeneratorTest(parameterized.TestCase, tf.test.TestCase):
       input_tensor = tf.zeros([100, 32, 32, 3])
       phoenix_spec = phoenix_spec_pb2.PhoenixSpec(
           problem_type=phoenix_spec_pb2.PhoenixSpec.CNN)
+      dirname = os.path.join(flags.FLAGS.test_tmpdir, str(trial_id))
+      if dirname and not tf.io.gfile.exists(dirname):
+        tf.io.gfile.makedirs(dirname)
       for tower in towers:
         _ = architecture_utils.construct_tower(
             phoenix_spec=phoenix_spec,
@@ -178,6 +182,8 @@ class PriorGeneratorTest(parameterized.TestCase, tf.test.TestCase):
             is_training=True,
             lengths=None,
             logits_dimension=10,
+            hparams=hp.HParams(),
+            model_directory=dirname,
             is_frozen=False,
             dropout_rate=None)
         architecture_utils.set_number_of_towers(tower, 1)

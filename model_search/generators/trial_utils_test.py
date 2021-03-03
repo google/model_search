@@ -38,11 +38,11 @@ def _fake_import_tower_one_tower(phoenix_spec, features, input_layer_fn,
                                  shared_input_tensor, original_tower_name,
                                  new_tower_name, model_directory, is_training,
                                  logits_dimension, shared_lengths,
-                                 force_snapshot, force_freeze,
-                                 allow_auxiliary_head, output):
+                                 new_model_directory, force_snapshot,
+                                 force_freeze, allow_auxiliary_head, output):
   del phoenix_spec, features, input_layer_fn, shared_input_tensor
   del model_directory, is_training, logits_dimension, shared_lengths
-  del force_snapshot, force_freeze, allow_auxiliary_head
+  del force_snapshot, force_freeze, allow_auxiliary_head, new_model_directory
   output.update({original_tower_name: new_tower_name})
   return architecture_utils.TowerSpec(None, None, None)
 

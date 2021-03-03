@@ -22,13 +22,15 @@ import time
 from absl import logging
 from model_search import blocks as blocks_lib
 from model_search import blocks_builder as blocks
+from model_search import hparam as hp
 from model_search import utils
+from model_search.proto import hparam_pb2
 from model_search.proto import phoenix_spec_pb2
 from model_search.proto import transfer_learning_spec_pb2
 import numpy as np
 import tensorflow.compat.v2 as tf
 import tf_slim
-
+from google.protobuf import text_format
 
 
 NUMBER_OF_TOWERS = "number_of_towers"
@@ -96,6 +98,39 @@ class DirectoryHandler(object):
     if getattr(trial, "model_dir", None) is not None:
       return trial.model_dir
 
+
+
+def get_blocks_search_space(blocks_to_use=None):
+  return blocks.Blocks.search_space(blocks_to_use=blocks_to_use)
+
+
+def get_block_hparams(hparams, block_name):
+  if not hparams:
+    return None
+  return hp.HParams(
+      **{
+          k[len(block_name + "_"):]: v
+          for k, v in hparams.values().items()
+          if k.startswith(block_name + "_")
+      })
+
+
+def get_hparams_from_dir(model_directory, tower_name):
+  hparams = hparam_pb2.HParamDef()
+  with tf.io.gfile.GFile(os.path.join(model_directory, tower_name), "r") as f:
+    text_format.Parse(f.read(), hparams)
+  output = hp.HParams(hparam_def=hparams)
+  return output
+
+
+def store_hparams_to_dir(hparams, model_directory, tower_name):
+  # Removing the "context" hparam. This hparam is added for tpu, by the tpu team
+  # It is not compatible with the function "to_proto" used below.
+  copy_hparams = hp.HParams(**hparams.values())
+  if hasattr(copy_hparams, "context"):
+    copy_hparams.del_hparam("context")
+  with tf.io.gfile.GFile(os.path.join(model_directory, tower_name), "w") as f:
+    f.write(str(copy_hparams.to_proto()))
 
 
 def get_architecture(directory, tower_name="search_generator_0"):
@@ -380,6 +415,8 @@ def construct_tower(phoenix_spec,
                     lengths,
                     logits_dimension,
                     is_frozen,
+                    hparams,
+                    model_directory,
                     dropout_rate=None,
                     allow_auxiliary_head=False):
   """Creates a tower giving an architecture.
@@ -396,6 +433,8 @@ def construct_tower(phoenix_spec,
       sequential problems.
     logits_dimension: The last axis dimension of the logits.
     is_frozen: Is the tower frozen - integer and not boolean.
+    hparams: The hparams for the tower.
+    model_directory: current trial model directory (a string).
     dropout_rate: a float indicating the rate of dropouts to apply between
       blocks. Applied only if the value is above zero.
     allow_auxiliary_head: Whether to allow importing the tower's auxiliary head,
@@ -424,7 +463,11 @@ def construct_tower(phoenix_spec,
         with (arg_scope(
             DATA_FORMAT_OPS, data_format=phoenix_spec.cnn_data_format)):
           output = blocks_builders[block_type].build(
-              input_tensors=output, is_training=is_training, lengths=lengths)
+              input_tensors=output,
+              is_training=is_training,
+              lengths=lengths,
+              hparams=get_block_hparams(hparams,
+                                        blocks.BlockType(block_type).name))
           if dropout_rate and dropout_rate > 0:
             output[-1] = tf.compat.v1.layers.dropout(
                 output[-1], rate=dropout_rate, training=is_training)
@@ -444,6 +487,10 @@ def construct_tower(phoenix_spec,
   set_parameter(tower_name, DROPOUTS,
                 (-1.0 if dropout_rate is None else dropout_rate), tf.float32)
   set_parameter(tower_name, IS_FROZEN, int(is_frozen))
+  if not tf.io.gfile.exists(model_directory):
+    tf.io.gfile.makedirs(model_directory)
+  store_hparams_to_dir(
+      hparams=hparams, model_directory=model_directory, tower_name=tower_name)
   return tower_spec
 
 
@@ -454,6 +501,7 @@ def import_tower(phoenix_spec,
                  original_tower_name,
                  new_tower_name,
                  model_directory,
+                 new_model_directory,
                  is_training,
                  logits_dimension,
                  shared_lengths,
@@ -473,6 +521,7 @@ def import_tower(phoenix_spec,
     new_tower_name: the name to give the new tower.
     model_directory: string, holds the model directory of the trial to import
       the tower from.
+    new_model_directory: the model directory of the current trial.
     is_training: a boolean indicating if we are in training.
     logits_dimension: The last axis dimension of the logits.
     shared_lengths: A `tf.Tensor` with the lengths (dimenions: [batch_size])
@@ -498,6 +547,7 @@ def import_tower(phoenix_spec,
 
   input_tensor = shared_input_tensor
   lengths = shared_lengths
+  hparams = get_hparams_from_dir(model_directory, original_tower_name)
   if not phoenix_spec.is_input_shared:
     lengths_feature_name = phoenix_spec.lengths_feature_name
     if isinstance(features, dict) and lengths_feature_name not in features:
@@ -517,6 +567,8 @@ def import_tower(phoenix_spec,
       is_training=is_training,
       logits_dimension=logits_dimension,
       dropout_rate=dropout_rate,
+      hparams=hparams,
+      model_directory=new_model_directory,
       is_frozen=(is_frozen or force_freeze),
       allow_auxiliary_head=allow_auxiliary_head)
 

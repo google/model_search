@@ -195,6 +195,7 @@ def import_towers_one_trial(features, input_layer_fn, phoenix_spec,
           logits_dimension=logits_dimension,
           shared_lengths=shared_lengths,
           force_snapshot=True,
+          new_model_directory=my_model_dir,
           force_freeze=force_freeze,
           allow_auxiliary_head=allow_auxiliary_head)
       logits_specs.append(tower_spec.logits_spec)
@@ -233,6 +234,7 @@ def import_towers_multiple_trials(features, input_layer_fn, phoenix_spec,
         logits_dimension=logits_dimension,
         shared_lengths=shared_lengths,
         force_snapshot=True,
+        new_model_directory=my_model_dir,
         force_freeze=force_freeze,
         allow_auxiliary_head=allow_auxiliary_head)
     logits_specs.append(tower_spec.logits_spec)

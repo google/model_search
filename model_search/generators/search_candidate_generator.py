@@ -71,7 +71,7 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
 
   def _create_new_architecture(self, features, input_layer_fn,
                                shared_input_tensor, architecture, run_config,
-                               my_id, is_training, shared_lengths,
+                               my_id, is_training, shared_lengths, hparams,
                                logits_dimension, dropout_rate, prev_trial,
                                trials):
     logging.info("Creating new architecture: ")
@@ -100,6 +100,8 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
         lengths=lengths,
         logits_dimension=logits_dimension,
         is_frozen=False,
+        hparams=hparams,
+        model_directory=run_config.model_dir,
         dropout_rate=dropout_rate,
         allow_auxiliary_head=self._allow_auxiliary_head)
     logits_specs = [tower_spec.logits_spec]
@@ -141,6 +143,7 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
         shared_input_tensor=shared_input_tensor,
         run_config=run_config,
         my_id=my_id,
+        hparams=hparams,
         is_training=is_training,
         shared_lengths=shared_lengths,
         logits_dimension=logits_dimension,
@@ -213,6 +216,7 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
             original_tower_name=tower_name,
             new_tower_name=tower_name,
             model_directory=model_dir,
+            new_model_directory=run_config.model_dir,
             is_training=is_training,
             logits_dimension=logits_dimension,
             shared_lengths=shared_lengths,

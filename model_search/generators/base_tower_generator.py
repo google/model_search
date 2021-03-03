@@ -124,6 +124,7 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
           original_tower_name=tower_name,
           new_tower_name=tower_name,
           model_directory=model_dir,
+          new_model_directory=model_dir,
           is_training=is_training,
           logits_dimension=logits_dimension,
           shared_lengths=shared_lengths,

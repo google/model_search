@@ -14,6 +14,7 @@ py_library(
         "//model_search/proto:all_proto_py_pb2",
         "//model_search:blocks",
         "//model_search:blocks_builder",
+        "//model_search:hparam",
         "//model_search:utils",
     ],
 )
@@ -28,6 +29,7 @@ py_test(
         "//model_search/proto:all_proto_py_pb2",
         "@absl_py//absl/testing:parameterized",
         "//model_search:blocks_builder",
+        "//model_search:hparam",
         "//model_search/metadata:trial",
     ],
 )

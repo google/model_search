@@ -16,6 +16,7 @@
 from absl.testing import parameterized
 
 from model_search import blocks
+from model_search import hparam as hp
 from model_search.architecture import architecture_utils
 import tensorflow.compat.v2 as tf
 import tf_slim
@@ -340,8 +341,22 @@ class BlocksTest(parameterized.TestCase, tf.test.TestCase):
           'block': blocks.BottleNeckBlock(skip_connect=True),
           'input_shape': [2, 3],
           'output_shape': [2, 3],
+      }, {
+          'testcase_name':
+              'tunable_svdf',
+          'block':
+              blocks.TunableSvdfBlock(),
+          'hparams':
+              hp.HParams(
+                  output_size=10, rank=1, memory_size=4, projection_size=34),
+          'input_shape': [2, 10, 10],
+          'output_shape': [2, 10, 34],
       })
-  def test_build_and_apply_block(self, block, output_shape, input_shape=None):
+  def test_build_and_apply_block(self,
+                                 block,
+                                 output_shape,
+                                 hparams=None,
+                                 input_shape=None):
     # Force graph mode
     with tf.compat.v1.Graph().as_default():
       if input_shape:
@@ -350,7 +365,7 @@ class BlocksTest(parameterized.TestCase, tf.test.TestCase):
         input_tensor = tf.zeros([2, 32, 32, 3])
 
       with arg_scope(architecture_utils.DATA_FORMAT_OPS, data_format='NHWC'):
-        output = block.build([input_tensor], is_training=True)
+        output = block.build([input_tensor], is_training=True, hparams=hparams)
       self.assertLessEqual(len(output), 2)
       self.assertAllEqual(output[-1].shape, output_shape)
 
@@ -470,17 +485,27 @@ class BlocksImportTest(parameterized.TestCase, tf.test.TestCase):
           'testcase_name': 'bottleneck_skip',
           'block': blocks.BottleNeckBlock(skip_connect=True),
           'input_rank': 2
+      }, {
+          'testcase_name':
+              'tunable_svdf',
+          'block':
+              blocks.TunableSvdfBlock(),
+          'input_rank':
+              3,
+          'hparams':
+              hp.HParams(
+                  output_size=10, rank=1, memory_size=4, projection_size=34)
       })
-  def test_ability_to_import(self, block, input_rank):
+  def test_ability_to_import(self, block, input_rank, hparams=None):
     # Force graph mode
     with tf.compat.v1.Graph().as_default():
       input_tensor = tf.zeros([32] * (input_rank))
 
       with arg_scope(architecture_utils.DATA_FORMAT_OPS, data_format='NHWC'):
         with tf.compat.v1.variable_scope('scope_a'):
-          _ = block.build([input_tensor], is_training=True)
+          _ = block.build([input_tensor], is_training=True, hparams=hparams)
         with tf.compat.v1.variable_scope('scope_b'):
-          _ = block.build([input_tensor], is_training=True)
+          _ = block.build([input_tensor], is_training=True, hparams=hparams)
 
       nodes = tf.compat.v1.get_default_graph().as_graph_def().node
       scope_a = [

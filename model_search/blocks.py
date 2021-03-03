@@ -22,6 +22,8 @@ import abc
 import enum
 import functools
 
+import kerastuner
+
 from model_search import registry
 from model_search.ops import svdf_cell
 from model_search.ops import svdf_conv
@@ -49,13 +51,14 @@ class Block(object, metaclass=abc.ABCMeta):
   """Block api for creating a new block."""
 
   @abc.abstractmethod
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a block for phoenix.
 
     Args:
       input_tensors: A list of input tensors.
       is_training: Whether we are training. Used for regularization.
       lengths: The lengths of the input sequences in the batch.
+      hparams: The training HParams.
 
     Returns:
       output_tensors: A list of the output tensors.
@@ -72,9 +75,17 @@ class Block(object, metaclass=abc.ABCMeta):
       Input for a dense layer.
     """
 
+  def requires_hparams(self):
+    """Returns a search space of hparams in case the block is tunable.
+
+    Returns:
+      kerastuner.engine.hyperparameters.HyperParameters object
+    """
+    return None
+
 
 # NEXT ID: 146
-# NEXT EXPERIMENTAL ID: 10016 (experiment id starts at 10,001)
+# NEXT EXPERIMENTAL ID: 10017 (experiment id starts at 10,001)
 register_block = functools.partial(registry.register, base=Block)
 
 # IMPORTANT NOTE:
@@ -128,7 +139,7 @@ class FixedChannelConvolutionBlock(Block):
     self._apply_batch_norm = apply_batch_norm
     self._stride = stride
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     # We always add a layer on the last tensor provided.
     input_tensor = input_tensors[-1]
     # TODO(b/172564129): Revert to keras layers http://b/130791880
@@ -187,7 +198,7 @@ class ConvolutionBlock(Block):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf_slim.conv2d(
         input_tensor,
@@ -222,7 +233,7 @@ class IncreaseChannelsBlock(Block):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf_slim.conv2d(
         input_tensor,
@@ -258,7 +269,7 @@ class DownsampleConvolutionBlock(Block):
     self._strides = strides
     self._apply_batch_norm = apply_batch_norm
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf_slim.conv2d(
         input_tensor,
@@ -289,7 +300,7 @@ class AveragePoolBlock(Block):
   def __init__(self, kernel_size=2):
     self._kernel_size = kernel_size
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     if input_tensor.get_shape().as_list()[2] < self._kernel_size:
       return input_tensors
@@ -322,7 +333,7 @@ class ResnetBlock(Block):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Residual unit with 2 sub layers."""
     input_tensor = input_tensors[-1]
     net = tf_slim.conv2d(
@@ -471,7 +482,7 @@ class FullyConnectedBlock(Block):
     raise ValueError('Invalid ResidualConnectionType: {}'.format(
         self._residual_connection_type))
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     input_tensor = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = input_tensor
@@ -533,7 +544,7 @@ class LowRankLayerBlock(Block):
     self._kernel_rank = kernel_rank
     self._skip_connect = skip_connect
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = tf.keras.layers.Dense(
@@ -578,7 +589,7 @@ class FixedOutputFullyConnectedBlock(Block):
     self._output_size = output_size
     self._relu_alpha = relu_alpha
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = tf.keras.layers.Dense(self._output_size, name='dense')(net)
@@ -620,7 +631,7 @@ class BottleNeckBlock(Block):
     self._projection_size = projection_size
     self._skip_connect = skip_connect
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = tf.keras.layers.Dense(self._projection_size, name='lower_dim')(net)
@@ -642,7 +653,7 @@ class BottleNeckBlock(Block):
 class IdentityBlock(Block):
   """An empty block for when using baysian opt. search algorithm."""
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     return input_tensors
 
   @property
@@ -668,7 +679,7 @@ class FullyConnectedPyramidBlock(Block):
     self._max_number_of_parameters = max_number_of_parameters
     self._max_output_size = max_output_size
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     max_output_size = self._max_output_size
@@ -698,7 +709,7 @@ class MaxPoolingBlock(Block):
     self._pool_size = pool_size
     self._strides = strides
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Applies 2d max pooling on the input tensor."""
     input_tensor = input_tensors[-1]
     if input_tensor.get_shape().as_list()[2] < self._pool_size:
@@ -741,7 +752,7 @@ class DilatedConvolutionBlock(Block):
     self._dilation_rate = dilation_rate
     self._apply_batch_norm = apply_batch_norm
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf_slim.conv2d(
         input_tensor,
@@ -766,7 +777,7 @@ class DilatedConvolutionBlock(Block):
 class FlattenBlock(Block):
   """Flattens the input."""
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     return input_tensors + [
         tf.keras.layers.Flatten(name='flatten')(input_tensor)
@@ -786,13 +797,14 @@ class DownsampleFlattenBlock(Block):
     self._strides = strides
     self._max_channels = max_channels
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a cnn tower with flatten at the top.
 
     Args:
       input_tensors: A list of rank four tf.Tensors with the input.
       is_training: Whether we are training. Used for regularization.
       lengths: The lengths of the input sequences in the batch.
+      hparams: hparams for the build.
 
     Returns:
       A cnn tower, where each cnn reduce the plate (with strides) and
@@ -829,7 +841,7 @@ class DualResnetBlock(Block):
   def __init__(self, kernel_size=3):
     self._kernel_size = kernel_size
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Returns a ReLU activated output of a residual unit with 2 sub layers."""
     input_tensor = input_tensors[-1]
     net1 = tf_slim.conv2d(
@@ -881,7 +893,7 @@ class GeneralBlock(Block):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Custom (wide) convolution block with some pooling."""
     # Guard so that we won't have zero channels
     input_tensor = input_tensors[-1]
@@ -967,7 +979,7 @@ class GeneralBlock(Block):
 class PlateReductionFlatten(Block):
   """Mean of plate."""
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     if len(input_tensors[-1].get_shape().as_list()) == 2:
       return input_tensors
     return input_tensors + [
@@ -1040,13 +1052,14 @@ class RnnBlock(Block):
     self._output_size = output_size
     self._skip = skip
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a basic rnn block.
 
     Args:
       input_tensors: A tf.Tensor with the input.
       is_training: Whether we are training. Used for regularization.
       lengths: The lengths of the input sequences in the batch.
+      hparams: hparams for the build.
 
     Returns:
       output tensor
@@ -1131,13 +1144,14 @@ class Conv1DBlock(Block):
     self._skip = skip
     self._dilation_rate = dilation_rate
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a one dimensional convolutional block.
 
     Args:
       input_tensors: A tf.Tensor with the input.
       is_training: Whether we are training. Used for regularization.
       lengths: The lengths of the input sequences in the batch.
+      hparams: hparams for the build.
 
     Returns:
       output tensor
@@ -1575,7 +1589,7 @@ class SvdfBlock(Block):
     layer_output = svdf_conv_layer(input_tensor)
     return layer_output
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     if self._fashion == SvdfImplementationFashion.SVDF_CONV:
       net = self._get_svdf_conv_output(input_tensor)
@@ -1594,6 +1608,48 @@ class SvdfBlock(Block):
   @property
   def is_input_order_important(self):
     return True
+
+
+@register_block(lookup_name='TUNABLE_SVDF', init_args={}, enum_id=10016)
+class TunableSvdfBlock(Block):
+  """Creates an SVDF layer.
+
+  An SVDF block - Recurrent cell or convolutional layer with low rank matrix
+  update. For more details: https://research.google.com/pubs/pub43813.html.
+  """
+
+  def _get_svdf_conv_output(self, input_tensor, hparams):
+    svdf_conv_layer = svdf_conv.SvdfConvLayer(
+        units=hparams.output_size,
+        memory_size=hparams.memory_size,
+        rank=hparams.rank,
+        kernel_initializer=tf.keras.initializers.RandomUniform(-0.16, 0.16),
+        name='svdf_conv_layer',
+    )
+    layer_output = svdf_conv_layer(input_tensor)
+    return layer_output
+
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+    input_tensor = input_tensors[-1]
+    net = self._get_svdf_conv_output(input_tensor, hparams)
+
+    if hparams.projection_size:
+      net = tf.keras.layers.Dense(
+          hparams.projection_size, activation=None, name='svdf_projection')(
+              net)
+    return input_tensors + [net]
+
+  @property
+  def is_input_order_important(self):
+    return True
+
+  def requires_hparams(self):
+    hps = kerastuner.engine.hyperparameters.HyperParameters()
+    hps.Int('output_size', 50, 100)
+    hps.Int('memory_size', 4, 32)
+    hps.Int('rank', 1, 3)
+    hps.Int('projection_size', 0, 128)
+    return hps
 
 
 @register_block(
@@ -1647,13 +1703,14 @@ class LSTMBlock(Block):
     self._output_size = output_size
     self._skip = skip
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds as LSTM block.
 
     Args:
       input_tensors: A list of tf.Tensors with the input.
       is_training: Whether we are training. Used for regularization.
       lengths: The lengths of the input sequences in the batch.
+      hparams: hparams for the build.
 
     Returns:
       output tensor
@@ -1725,13 +1782,14 @@ class BidirectionalLSTMBlock(Block):
     self._output_size = output_size
     self._skip = skip
 
-  def build(self, input_tensors, is_training, lengths=None):
+  def build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds as LSTM block.
 
     Args:
       input_tensors: A list of tf.Tensors with the input.
       is_training: Whether we are training. Used for regularization.
       lengths: The lengths of the input sequences in the batch.
+      hparams: hparams for the build.
 
     Returns:
       output tensor

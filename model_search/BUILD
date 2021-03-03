@@ -50,6 +50,7 @@ py_library(
     deps = [
         ":blocks",
         ":registry",
+        "//model_search/hparams:hyperparameters",
     ],
 )
 
@@ -74,6 +75,7 @@ py_test(
     deps = [
         ":blocks",
         "@absl_py//absl/testing:parameterized",
+        "//model_search:hparam",
         "//model_search/architecture:architecture_utils",
     ],
 )
