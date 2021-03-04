@@ -29,7 +29,8 @@ Let us start with the simplest case. You have a csv file where the features are 
 and you would like to run let AutoML find the best model architecture for you.
 
 Below is a code snippet for doing so:
-## Getting Ended
+## Next will be about python
+
 ```python
 import model_search
 from model_search import constants
