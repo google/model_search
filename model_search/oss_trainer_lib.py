@@ -93,7 +93,7 @@ flags.DEFINE_bool(
     "Meaning, it has to be 1 tpu. Other topologies, like 8x8 are a tpu pod, "
     "which mean distributed evaluation; that is not supported yet in TF."
     "Additionally, use_tpu must be True for this to work.")
-flags.DEFINE_bool("phoenix_export_saved_model", False,
+flags.DEFINE_bool("phoenix_export_saved_model", True,
                   "Whether to export saved models.")
 flags.DEFINE_integer("phoenix_tf_random_seed", None,
                      "Graph level random seed for TensorFlow.")
@@ -250,6 +250,15 @@ def run_train_and_eval(hparams, model_dir, phoenix_instance, data_provider,
           mode=tf.estimator.ModeKeys.EVAL,
           batch_size=batch_size),
       steps=eval_steps)
+
+  if FLAGS.phoenix_export_saved_model:
+    tf.compat.v1.reset_default_graph()
+    tf.keras.backend.clear_session()
+    tf.compat.v1.Session.reset(target=FLAGS.phoenix_master)
+    estimator.export_saved_model(
+        os.path.join(model_dir, "saved_model"),
+        data_provider.get_serving_input_fn(hparams=hparams))
+
   tf.compat.v1.reset_default_graph()
   tf.keras.backend.clear_session()
   tf.compat.v1.Session.reset(target=FLAGS.phoenix_master)

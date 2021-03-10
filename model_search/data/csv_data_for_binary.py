@@ -82,12 +82,6 @@ class Provider(data.Provider):
 
     return input_fn
 
-  def _get_feature_spec(self):
-    return tf.estimator.classifier_parse_example_spec(
-        self.get_feature_columns(),
-        label_key=str(self._label_index),
-        label_dtype=tf.int32)
-
   def get_serving_input_fn(self, hparams):
     """Returns an `input_fn` for serving in an exported SavedModel.
 
@@ -99,8 +93,16 @@ class Provider(data.Provider):
         `ServingInputReceiver`.
     """
 
-    return tf.estimator.export.build_parsing_serving_input_receiver_fn(
-        self._get_feature_spec())
+    features_ind = [
+        idx for idx in self._features if idx != str(self._label_index)
+    ]
+    tf.compat.v1.disable_eager_execution()
+    features = {
+        idx: tf.compat.v1.placeholder(tf.float32, [None], idx)
+        for idx in features_ind
+    }
+    return tf.estimator.export.build_raw_serving_input_receiver_fn(
+        features=features)
 
   def number_of_classes(self):
     return self._logits_dimension
