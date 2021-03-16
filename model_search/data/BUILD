@@ -64,6 +64,57 @@ model_search_oss_binary(
 )
 
 py_library(
+    name = "image_data",
+    srcs = ["image_data.py"],
+    srcs_version = "PY3",
+    deps = [":data"],
+)
+
+py_library(
+    name = "image_data_for_binary",
+    srcs = ["image_data_for_binary.py"],
+    srcs_version = "PY3",
+    deps = [":data"],
+)
+
+py_test(
+    name = "image_data_test",
+    srcs = ["image_data_test.py"],
+    data = [
+        "//model_search/configs:phoenix_configs",
+        "//model_search/data/testdata:image_data",
+    ],
+    python_version = "PY3",
+    srcs_version = "PY3",
+    deps = [
+        ":image_data",
+        "@absl_py//absl/testing:absltest",
+        "@absl_py//absl/testing:parameterized",
+        "//model_search:constants",
+        "//model_search:single_trainer",
+    ],
+)
+
+model_search_oss_test(
+    name = "image_data_for_binary_test",
+    dataset_dep = ":image_data_for_binary",
+    extra_args = [
+        "--input_dir=$${TEST_SRCDIR}/model_search/data/testdata/images",
+        "--image_height=100",
+        "--image_width=100",
+    ],
+    problem_type = "cnn",
+    test_data = [
+        "//model_search/data/testdata:image_data",
+    ],
+)
+
+model_search_oss_binary(
+    name = "image_data_binary",
+    dataset_dep = ":image_data_for_binary",
+)
+
+py_library(
     name = "data",
     srcs = ["data.py"],
     srcs_version = "PY3",

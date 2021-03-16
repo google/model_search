@@ -66,10 +66,41 @@ The search will be performed according to the default specification. That can be
 For more details about the fields and if you want to create your own specification, you
 can look at: `model_search/proto/phoenix_spec.proto`.
 
-Now, what if you don't have a csv with the features? The next section shows
+### Image data example
+Below is an example of binary classification for images.
+
+```python
+import model_search
+from model_search import constants
+from model_search import single_trainer
+from model_search.data import image_data
+
+trainer = single_trainer.SingleTrainer(
+    data=image_data.Provider(
+        input_dir="model_search/data/testdata/images"
+        image_height=100,
+        image_width=100,
+        eval_fraction=0.2),
+    spec=constants.DEFAULT_CNN)
+
+trainer.try_models(
+    number_models=200,
+    train_steps=1000,
+    eval_steps=100,
+    root_dir="/tmp/run_example",
+    batch_size=32,
+    experiment_name="example",
+    experiment_owner="model_search_user")
+```
+The api above follows the same input fields as `tf.keras.preprocessing.image_dataset_from_directory`.
+
+The search will be performed according to the default specification. That can be found in:
+`model_search/configs/cnn_config.pbtxt`.
+
+Now, what if you don't have a csv with the features or images? The next section shows
 how to run without a csv.
 
-## Non-csv data
+## Non-csv, Non-image data
 To run with non-csv data, you will have to implement a class inherited from the abstract
 class `model_search.data.Provider`. This enables us to define our own
 `input_fn` and hence customize the feature columns and the task (i.e., the number

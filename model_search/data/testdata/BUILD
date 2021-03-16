@@ -10,3 +10,10 @@ filegroup(
         "csv_random_data.csv",
     ],
 )
+
+filegroup(
+    name = "image_data",
+    srcs = glob([
+        "**/*.png",
+    ]),
+)

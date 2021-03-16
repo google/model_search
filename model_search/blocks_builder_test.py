@@ -58,7 +58,7 @@ class BlocksBuilderTest(tf.test.TestCase):
     for idx, name in enumerate(names):
       for idx2, name2 in enumerate(names):
         if idx != idx2:
-          self.assertNotStartsWith(name, name2)
+          self.assertNotStartsWith(name.name, name2.name)
 
 
 if __name__ == "__main__":
