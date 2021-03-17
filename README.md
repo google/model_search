@@ -24,6 +24,39 @@ version supports classification problems only. Let's start by looking at some
 classic classification problems and see how the framework can automatically find competitive
 model architectures.
 
+## Installation using Anaconda
+In this section, we explain how to install necessary enviroment through Anaconda
+1. Install AnaConda, please refer to https://docs.anaconda.com/anaconda/install/
+2. Create new environment with Python3.8
+```console
+conda create -n auto_search python=3.8
+```
+3. Activate the new environment
+```console
+conda activate auto_search
+```
+4. Clone the repo
+```console
+git clone https://github.com/google/model_search.git
+cd model_search/ 
+```
+5. Install Requirements
+```console
+pip install -r requirements.txt
+```
+6. Install Protobuf 
+```console
+conda install -c anaconda protobuf
+```
+7. Compile Protobuf
+```console
+protoc --python_out=./ model_search/proto/phoenix_spec.proto
+protoc --python_out=./ model_search/proto/hparam.proto
+protoc --python_out=./ model_search/proto/distillation_spec.proto
+protoc --python_out=./ model_search/proto/ensembling_spec.proto
+protoc --python_out=./ model_search/proto/transfer_learning_spec.proto 
+```
+
 ## Getting Started
 Let us start with the simplest case. You have a csv file where the features are numbers
 and you would like to run let AutoML find the best model architecture for you.
