@@ -499,7 +499,7 @@ class BlocksImportTest(parameterized.TestCase, tf.test.TestCase):
   def test_ability_to_import(self, block, input_rank, hparams=None):
     # Force graph mode
     with tf.compat.v1.Graph().as_default():
-      input_tensor = tf.zeros([32] * (input_rank))
+      input_tensor = tf.zeros([32] * input_rank)
 
       with arg_scope(architecture_utils.DATA_FORMAT_OPS, data_format='NHWC'):
         with tf.compat.v1.variable_scope('scope_a'):

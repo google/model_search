@@ -184,7 +184,8 @@ class Block(object, metaclass=abc.ABCMeta):
       output_tensors: A list of the output tensors.
     """
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def is_input_order_important(self):
     """Is the order of the entries in the input tensor important.
 

@@ -276,7 +276,6 @@ def fix_architecture_order(architecture, problem_type):
   if problem_type != phoenix_spec_pb2.PhoenixSpec.CNN:
     return architecture
 
-  output_architecture = []
   flattens = tuple(block for block in architecture
                    if "FLATTEN" in blocks.BlockType(block).name)
   if not flattens:

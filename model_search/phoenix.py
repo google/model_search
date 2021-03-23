@@ -560,7 +560,7 @@ class Phoenix(object):
 
     increment_amount = 1
     tower_size = architecture_utils.get_architecture_size(tower_name)
-    if (self._phoenix_spec.use_parameter_scaled_training and tower_size):
+    if self._phoenix_spec.use_parameter_scaled_training and tower_size:
       train_step_per_block = max(
           int(train_steps // self._phoenix_spec.maximum_depth), 1)
       tower_train_steps = tower_size * train_step_per_block

@@ -19,7 +19,8 @@ import abc
 class MetaData(object, metaclass=abc.ABCMeta):
   """Api for metadata storage."""
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def name(self):
     """The name of the metadata storage handler."""
 

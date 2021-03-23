@@ -304,10 +304,10 @@ class HarmonicaTest(parameterized.TestCase, tf.test.TestCase):
     output = algorithm._extract_relevant_variables_indices(
         feature_extender, np.array([1, 1, 1] + [0] * 7 + [1]))
     logging.info(output)
-    self.assertAllEqual(output, set([0, 1, 2, 3]))
+    self.assertAllEqual(output, {0, 1, 2, 3})
     output = algorithm._extract_relevant_variables_indices(
         feature_extender, np.array([1, 0, 0] + [0] * 7 + [1]))
-    self.assertAllEqual(output, set([2, 3]))
+    self.assertAllEqual(output, {2, 3})
     output = algorithm._extract_relevant_variables_indices(
         feature_extender, np.array([1, 0, 0] + [0] * 7 + [0]))
     self.assertEmpty(output)
@@ -329,7 +329,7 @@ class HarmonicaTest(parameterized.TestCase, tf.test.TestCase):
         expected_output,
         algorithm._get_good_architecture(
             feature_extender, 20, np.array([0, 0.5, 0.6, -0.2] + [0] * 33),
-            set([3, 3, 3, 3])))
+            {3, 3, 3, 3}))
 
 
 if __name__ == "__main__":

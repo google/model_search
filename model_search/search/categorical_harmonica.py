@@ -300,7 +300,6 @@ class Harmonica(search_algorithm.SearchAlgorithm):
     # Expanding to polynomial features
     x = self._get_polynomial_expansion(feature_extender, x)
 
-    zeroed_coeff = None
     relevant_variables = []
     for _ in range(self._num_of_restarts):
       logging.info("Running linear regression..")

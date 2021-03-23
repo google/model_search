@@ -35,6 +35,7 @@ class SingleTrainer(object):
       self._spec = spec
 
     self._tuner_id = "tuner-1"
+    self._oracle = None
 
   def try_models(self, number_models, train_steps, eval_steps, root_dir,
                  batch_size, experiment_name, experiment_owner):

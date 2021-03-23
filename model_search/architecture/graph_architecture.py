@@ -102,7 +102,8 @@ class Combiner(metaclass=abc.ABCMeta):
   inputs, so we cannot make all Reducers output only one Tensor.
   """
 
-  @abc.abstractproperty
+  @property
+  @abc.abstractmethod
   def name(self):
     """Name of the Combiner."""
 
