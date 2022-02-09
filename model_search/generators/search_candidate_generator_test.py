@@ -17,8 +17,9 @@
 
 search_candidate_generator.
 """
-
 import collections
+
+
 import os
 
 from absl import flags
@@ -62,9 +63,8 @@ _FIRST_GRAPH_NODE_SUBSET = [
     u'zeros/shape_as_tensor',
     u'zeros/Const',
     u'zeros',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/Conv/weights',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/Conv/biases',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/LeakyRelu',
+    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/conv2d/kernel',
+    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/conv2d/bias',
     u'Phoenix/search_generator_0/last_dense_4/dense/kernel',
     u'Phoenix/search_generator_0/last_dense_4/dense/bias',
     u'Phoenix/search_generator_0/last_dense_4/logits',
@@ -78,9 +78,8 @@ _SUGGESTIONS_GRAPH_NODE_SUBSET = [
     u'zeros/shape_as_tensor',
     u'zeros/Const',
     u'zeros',
-    u'Phoenix/search_generator_0/1_DILATED_CONVOLUTION_4_20/Conv/weights',
-    u'Phoenix/search_generator_0/1_DILATED_CONVOLUTION_4_20/Conv/biases',
-    u'Phoenix/search_generator_0/1_DILATED_CONVOLUTION_4_20/LeakyRelu',
+    u'Phoenix/search_generator_0/1_DILATED_CONVOLUTION_4_20/conv2d/kernel',
+    u'Phoenix/search_generator_0/1_DILATED_CONVOLUTION_4_20/conv2d/bias',
     u'Phoenix/search_generator_0/last_dense_20/dense/kernel',
     u'Phoenix/search_generator_0/last_dense_20/dense/bias',
     u'Phoenix/search_generator_0/last_dense_20/logits',
@@ -94,9 +93,8 @@ _DROPOUT_GRAPH_NODE = [
     u'zeros/shape_as_tensor',
     u'zeros/Const',
     u'zeros',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/Conv/weights',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/Conv/biases',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/LeakyRelu',
+    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/conv2d/kernel',
+    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/conv2d/bias',
     u'Phoenix/search_generator_0/last_dense_4/dense/kernel',
     u'Phoenix/search_generator_0/last_dense_4/dense/bias',
     u'Phoenix/search_generator_0/last_dense_4/logits',
@@ -110,10 +108,11 @@ _DISTILLATION_GRAPH_NODE_SUBSET = [
     u'zeros/shape_as_tensor',
     u'zeros/Const',
     u'zeros',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/Conv/weights/Initializer/random_uniform',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/Conv/weights',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/BatchNorm/Const',
-    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/BatchNorm/beta',
+    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/conv2d/kernel/Initializer/random_uniform',
+    u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/conv2d/kernel',
+    # Removing until we enable batch norm
+    # u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/batch_normalization/Const',
+    # u'Phoenix/search_generator_0/1_CONVOLUTION_3X3_4/batch_normalization/beta',
     u'Phoenix/search_generator_0/last_dense_4/dense/kernel/Initializer/random_uniform',
     u'Phoenix/search_generator_0/last_dense_4/dense/kernel',
     u'Phoenix/search_generator_0/last_dense_4/dense/bias',
@@ -168,21 +167,21 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
                                            ['model_dir', 'is_chief'])
       run_config = fake_config(
           model_dir=flags.FLAGS.test_tmpdir + '/1', is_chief=True)
-      _ = generator.generate(
-          features={},
+      towers = generator.generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.NO_PRIOR,
-          shared_input_tensor=input_tensor,
-          shared_lengths=None,
           logits_dimension=10,
           hparams=hp.HParams(initial_architecture=['CONVOLUTION_3X3']),
           run_config=run_config,
           is_training=True,
           trials=[])
+      for t in towers:
+        t(input_tensor, training=True)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
       ]
+
       self.assertAllInSet(_FIRST_GRAPH_NODE_SUBSET, all_nodes)
 
   def test_generator_with_suggestions(self):
@@ -205,17 +204,16 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
                                            ['model_dir', 'is_chief'])
       run_config = fake_config(
           model_dir=flags.FLAGS.test_tmpdir + '/1', is_chief=True)
-      _ = generator.generate(
-          features={},
+      towers = generator.generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.ENSEMBLE_SEARCH,
-          shared_input_tensor=input_tensor,
-          shared_lengths=None,
           logits_dimension=10,
           hparams=hp.HParams(initial_architecture=['CONVOLUTION_3X3']),
           run_config=run_config,
           is_training=True,
           trials=[])
+      for t in towers:
+        t(input_tensor, training=True)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
@@ -238,22 +236,22 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
                                            ['model_dir', 'is_chief'])
       run_config = fake_config(
           model_dir=flags.FLAGS.test_tmpdir + '/1', is_chief=True)
-      _ = generator.generate(
-          features={},
+      towers = generator.generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.NO_PRIOR,
-          shared_input_tensor=input_tensor,
-          shared_lengths=None,
           logits_dimension=10,
           hparams=hp.HParams(
               initial_architecture=['CONVOLUTION_3X3'], dropout_rate=0.3),
           run_config=run_config,
           is_training=True,
           trials=[])
+      for t in towers:
+        t(input_tensor, training=True)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
       ]
+      tf.compat.v1.logging.info(all_nodes)
       self.assertAllInSet(_DROPOUT_GRAPH_NODE, all_nodes)
 
   def test_generator_with_snapshot(self):
@@ -277,12 +275,9 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
       run_config = fake_config(
           model_dir=flags.FLAGS.test_tmpdir + '/3', is_chief=True)
       self._create_checkpoint(['search_generator'], 2)
-      _ = generator.generate(
-          features={},
+      towers = generator.generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.ENSEMBLE_SEARCH,
-          shared_input_tensor=input_tensor,
-          shared_lengths=None,
           logits_dimension=10,
           hparams=hp.HParams(
               initial_architecture=['CONVOLUTION_3X3'],
@@ -291,6 +286,8 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
           run_config=run_config,
           is_training=True,
           trials=_create_trials(flags.FLAGS.test_tmpdir))
+      for t in towers:
+        t(input_tensor, training=True)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
@@ -315,17 +312,16 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
                                            ['model_dir', 'is_chief'])
       run_config = fake_config(
           model_dir=flags.FLAGS.test_tmpdir + '/1', is_chief=True)
-      _ = generator.generate(
-          features={},
+      towers = generator.generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.DISTILLATION,
-          shared_input_tensor=input_tensor,
-          shared_lengths=None,
           logits_dimension=10,
           hparams=hp.HParams(initial_architecture=['CONVOLUTION_3X3']),
           run_config=run_config,
           is_training=True,
           trials=[])
+      for t in towers:
+        t(input_tensor, training=True)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
@@ -360,13 +356,9 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
       self._create_checkpoint(['search_generator'], 2)
       self._create_checkpoint(['search_generator'], 3)
       self._create_checkpoint(['search_generator'], 5)
-      input_tensor = tf.zeros([20, 32, 32, 3])
       _ = generator.generate(
-          features={},
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.DISTILLATION,
-          shared_input_tensor=input_tensor,
-          shared_lengths=None,
           logits_dimension=10,
           hparams=hp.HParams(initial_architecture=['CONVOLUTION_3X3']),
           run_config=run_config,
@@ -375,6 +367,7 @@ class SearchCandidateGeneratorTest(tf.test.TestCase):
               flags.FLAGS.test_tmpdir))
 
 
+
 if __name__ == '__main__':
-  tf.enable_v2_behavior()
-  tf.test.main()
+    tf.enable_v2_behavior()
+    tf.test.main()

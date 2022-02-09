@@ -21,6 +21,7 @@ import os
 
 from model_search import hparam as hp
 from model_search.architecture import architecture_utils
+from model_search.architecture import tower
 from model_search.generators import base_tower_generator
 from model_search.metadata import trial as trial_module
 from model_search.proto import distillation_spec_pb2
@@ -169,37 +170,29 @@ def create_test_trials_intermixed(root_dir):
   return [trial_module.Trial(t) for t in trials]
 
 
-def import_towers_one_trial(features, input_layer_fn, phoenix_spec,
-                            shared_input_tensor, shared_lengths, is_training,
-                            logits_dimension, prev_model_dir, force_freeze,
-                            allow_auxiliary_head, caller_generator,
-                            my_model_dir):
+def import_towers_one_trial(phoenix_spec, is_training, logits_dimension,
+                            prev_model_dir, force_freeze, allow_auxiliary_head,
+                            caller_generator, my_model_dir):
   """Imports a previous trial to current model."""
-  logits_specs = []
-  architectures = []
+  towers = []
   imported_towers = 0
   for generator in base_tower_generator.ALL_GENERATORS:
-    towers = architecture_utils.get_number_of_towers(prev_model_dir, generator)
+    num_towers = architecture_utils.get_number_of_towers(
+        prev_model_dir, generator)
     # Import all towers from a given generator.
-    for i in range(towers):
+    for i in range(num_towers):
       tower_name = generator + '_{}'.format(str(i))
-      tower_spec = architecture_utils.import_tower(
+      tower_ = tower.Tower.load(
           phoenix_spec=phoenix_spec,
-          features=features,
-          input_layer_fn=input_layer_fn,
-          shared_input_tensor=shared_input_tensor,
           original_tower_name=tower_name,
           new_tower_name=caller_generator + '_{}'.format(str(imported_towers)),
           model_directory=prev_model_dir,
           is_training=is_training,
           logits_dimension=logits_dimension,
-          shared_lengths=shared_lengths,
-          force_snapshot=True,
           new_model_directory=my_model_dir,
           force_freeze=force_freeze,
           allow_auxiliary_head=allow_auxiliary_head)
-      logits_specs.append(tower_spec.logits_spec)
-      architectures.append(tower_spec.architecture)
+      towers.append(tower_)
       imported_towers += 1
 
   architecture_utils.set_number_of_towers(caller_generator, imported_towers)
@@ -208,37 +201,28 @@ def import_towers_one_trial(features, input_layer_fn, phoenix_spec,
     with tf.io.gfile.GFile(
         os.path.join(my_model_dir, _PREVIOUS_DEPENDENCIES_FILENAME), 'w+') as f:
       f.write(prev_model_dir)
-  return logits_specs, architectures
+  return towers
 
 
-def import_towers_multiple_trials(features, input_layer_fn, phoenix_spec,
-                                  shared_input_tensor, shared_lengths,
-                                  is_training, logits_dimension,
+def import_towers_multiple_trials(phoenix_spec, is_training, logits_dimension,
                                   previous_model_dirs, force_freeze,
                                   allow_auxiliary_head, caller_generator,
                                   my_model_dir):
   """Imports search generators' model from many trials."""
-  logits_specs = []
-  architectures = []
+  towers = []
   for i, prev_model_dir in enumerate(previous_model_dirs):
     tower_name = 'search_generator_0'
-    tower_spec = architecture_utils.import_tower(
+    tower_ = tower.Tower.load(
         phoenix_spec=phoenix_spec,
-        features=features,
-        input_layer_fn=input_layer_fn,
-        shared_input_tensor=shared_input_tensor,
         original_tower_name=tower_name,
         new_tower_name=caller_generator + '_{}'.format(str(i)),
         model_directory=prev_model_dir,
         is_training=is_training,
         logits_dimension=logits_dimension,
-        shared_lengths=shared_lengths,
-        force_snapshot=True,
         new_model_directory=my_model_dir,
         force_freeze=force_freeze,
         allow_auxiliary_head=allow_auxiliary_head)
-    logits_specs.append(tower_spec.logits_spec)
-    architectures.append(tower_spec.architecture)
+    towers.append(tower_)
 
   architecture_utils.set_number_of_towers(
       generator_name=caller_generator,
@@ -248,7 +232,7 @@ def import_towers_multiple_trials(features, input_layer_fn, phoenix_spec,
     with tf.io.gfile.GFile(
         os.path.join(my_model_dir, _PREVIOUS_DEPENDENCIES_FILENAME), 'w+') as f:
       f.write('\n'.join(previous_model_dirs))
-  return logits_specs, architectures
+  return towers
 
 
 def write_replay_spec(model_dir, filename, original_spec, search_architecture,
@@ -265,7 +249,7 @@ def write_replay_spec(model_dir, filename, original_spec, search_architecture,
   if tf.io.gfile.exists(dependency_file):
     with tf.io.gfile.GFile(dependency_file, 'r') as f:
       data = f.read().split('\n')
-    for dependency in data:
+    for dependency in set(data):
       spec = phoenix_spec_pb2.PhoenixSpec()
       with tf.io.gfile.GFile(os.path.join(dependency, filename), 'r') as f:
         text_format.Parse(f.read(), spec)

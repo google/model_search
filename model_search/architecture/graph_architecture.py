@@ -22,7 +22,7 @@ import time
 
 from absl import logging
 
-from model_search import blocks_builder
+from model_search import block_builder
 from model_search import utils
 from model_search.architecture import architecture_utils
 from model_search.proto import phoenix_spec_pb2
@@ -177,7 +177,7 @@ COMBINER_MAP = {
     CombinerType.IDENTITY: IdentityCombiner(),
 }
 
-BLOCK_BUILDER_MAP = blocks_builder.Blocks()
+BLOCK_BUILDER_MAP = block_builder.Blocks()
 
 
 class Node(
@@ -223,7 +223,7 @@ class Node(
 
   @property
   def block_name(self):
-    return str(blocks_builder.BlockType(self.block_type).name)
+    return str(block_builder.BlockType(self.block_type).name)
 
 
 class Architecture(
@@ -389,7 +389,7 @@ class Architecture(
               data_format=phoenix_spec.cnn_data_format)):
             selected_layers = node.input_selector(all_layers)
             combined_layers = node.combiner(selected_layers)
-            output = node.block_builder.build(
+            output = node.block_builder.block_build(
                 input_tensors=combined_layers,
                 is_training=is_training,
                 lengths=lengths)
@@ -560,7 +560,7 @@ def old_to_new_architecture(old_architecture):
 
   node_list = []
   for block_type in old_architecture:
-    block_type_name = blocks_builder.BlockType(block_type).name
+    block_type_name = block_builder.BlockType(block_type).name
     if ("NASNET" in block_type_name) or ("AMOEBA" in block_type_name):
       input_indices = [-2, -1]
     else:

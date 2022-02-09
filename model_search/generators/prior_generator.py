@@ -54,8 +54,7 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
 
     return best_trials
 
-  def _nonadaptive_ensemble(self, features, input_layer_fn, shared_input_tensor,
-                            shared_lengths, logits_dimension, relevant_trials,
+  def _nonadaptive_ensemble(self, logits_dimension, relevant_trials,
                             is_training, num_trials_to_consider, width,
                             my_model_dir):
     best_trials = self._metadata.get_best_k(
@@ -80,11 +79,7 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
       ]
 
     return trial_utils.import_towers_multiple_trials(
-        features=features,
-        input_layer_fn=input_layer_fn,
         phoenix_spec=self._phoenix_spec,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         is_training=is_training,
         logits_dimension=logits_dimension,
         previous_model_dirs=previous_model_dirs,
@@ -93,15 +88,10 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
         caller_generator=self.generator_name(),
         my_model_dir=my_model_dir)
 
-  def build_priors_intermixed(self, features, input_layer_fn,
-                              shared_input_tensor, shared_lengths, is_training,
-                              logits_dimension, trials, my_id, my_model_dir):
+  def build_priors_intermixed(self, is_training, logits_dimension, trials,
+                              my_id, my_model_dir):
     intermixed_spec = self._ensemble_spec.intermixed_search
     return self._nonadaptive_ensemble(
-        features=features,
-        input_layer_fn=input_layer_fn,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         logits_dimension=logits_dimension,
         relevant_trials=trials,
         is_training=is_training,
@@ -109,10 +99,8 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
         width=intermixed_spec.width,
         my_model_dir=my_model_dir)
 
-  def build_priors_nonadaptively(self, features, input_layer_fn,
-                                 shared_input_tensor, shared_lengths,
-                                 is_training, logits_dimension, trials, my_id,
-                                 my_model_dir):
+  def build_priors_nonadaptively(self, is_training, logits_dimension, trials,
+                                 my_id, my_model_dir):
     nonadaptive_spec = self._ensemble_spec.nonadaptive_search
     num_trials_to_consider = nonadaptive_spec.num_trials_to_consider
     assert num_trials_to_consider > 1
@@ -122,13 +110,9 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
 
     if not best_trials:
       architecture_utils.set_number_of_towers(self.generator_name(), 0)
-      return [], []
+      return []
 
     return self._nonadaptive_ensemble(
-        features=features,
-        input_layer_fn=input_layer_fn,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         logits_dimension=logits_dimension,
         relevant_trials=best_trials,
         is_training=is_training,
@@ -136,9 +120,8 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
         width=nonadaptive_spec.width,
         my_model_dir=my_model_dir)
 
-  def build_priors_adaptively(self, features, input_layer_fn,
-                              shared_input_tensor, shared_lengths, is_training,
-                              trials, logits_dimension, my_id, my_model_dir):
+  def build_priors_adaptively(self, is_training, trials, logits_dimension,
+                              my_id, my_model_dir):
     increase_every = self._ensemble_spec.adaptive_search.increase_width_every
 
     pool_size = my_id // increase_every * increase_every
@@ -147,7 +130,7 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
 
     if not best_trial:
       architecture_utils.set_number_of_towers(self.generator_name(), 0)
-      return [], []
+      return []
 
     # TODO(b/172564129): In the adaptive case, if distillation happens before
     # ensembling, Phoenix will import both the teacher and the student and wire
@@ -156,11 +139,7 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
     # which imports both the priors and the search tower, instead of just the
     # search tower).
     return trial_utils.import_towers_one_trial(
-        features=features,
-        input_layer_fn=input_layer_fn,
         phoenix_spec=self._phoenix_spec,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         is_training=is_training,
         logits_dimension=logits_dimension,
         prev_model_dir=architecture_utils.DirectoryHandler.trial_dir(
@@ -170,13 +149,11 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
         caller_generator=self.generator_name(),
         my_model_dir=my_model_dir)
 
-  def build_priors_distillation(self, features, input_layer_fn,
-                                shared_input_tensor, shared_lengths,
-                                is_training, logits_dimension, trials, my_id,
-                                my_model_dir):
+  def build_priors_distillation(self, is_training, logits_dimension, trials,
+                                my_id, my_model_dir):
     if not is_training:
       architecture_utils.set_number_of_towers(self.generator_name(), 0)
-      return [], []
+      return []
 
     # When distilling, we always want the best ensemble.
     num_trials_to_consider = 1
@@ -185,14 +162,10 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
 
     if not best_trial:
       architecture_utils.set_number_of_towers(self.generator_name(), 0)
-      return [], []
+      return []
 
     return trial_utils.import_towers_one_trial(
-        features=features,
-        input_layer_fn=input_layer_fn,
         phoenix_spec=self._phoenix_spec,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         is_training=is_training,
         logits_dimension=logits_dimension,
         prev_model_dir=architecture_utils.DirectoryHandler.trial_dir(
@@ -202,41 +175,25 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
         caller_generator=self.generator_name(),
         my_model_dir=my_model_dir)
 
-  def _build_from_existing_checkpoint(self,
-                                      model_dir,
-                                      features,
-                                      input_layer_fn,
-                                      trial_mode,
-                                      shared_input_tensor,
-                                      logits_dimension,
-                                      is_training,
-                                      shared_lengths=None):
+  def _build_from_existing_checkpoint(self, model_dir, trial_mode,
+                                      logits_dimension, is_training):
     """See parent class."""
     if trial_mode == trial_utils.TrialMode.DISTILLATION and not is_training:
-      return [], []
-    return super(PriorGenerator, self)._build_from_existing_checkpoint(
-        model_dir,
-        features,
-        input_layer_fn,
-        trial_mode,
-        shared_input_tensor,
-        logits_dimension,
-        is_training,
-        shared_lengths=None)
+      return []
+    return super(PriorGenerator,
+                 self)._build_from_existing_checkpoint(model_dir, trial_mode,
+                                                       logits_dimension,
+                                                       is_training)
 
-  def first_time_chief_generate(self, features, input_layer_fn, trial_mode,
-                                shared_input_tensor, shared_lengths,
+  def first_time_chief_generate(self, input_layer_fn, trial_mode,
                                 logits_dimension, hparams, run_config,
                                 is_training, trials):
     """Creates the prior for the ensemble."""
+    del input_layer_fn
     my_id = architecture_utils.DirectoryHandler.get_trial_id(
         run_config.model_dir, self._phoenix_spec)
 
     prior_build_args = dict(
-        features=features,
-        input_layer_fn=input_layer_fn,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         is_training=is_training,
         trials=trials,
         logits_dimension=logits_dimension,
@@ -264,4 +221,4 @@ class PriorGenerator(base_tower_generator.BaseTowerGenerator):
 
     # No ensemble spec or distillation spec was specified.
     architecture_utils.set_number_of_towers(self.generator_name(), 0)
-    return [], []
+    return []

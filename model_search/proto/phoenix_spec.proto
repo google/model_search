@@ -90,7 +90,7 @@ message TowerSuggestion {
 // given the search logits. I.e., you can specify what blocks to add above the
 // shared model to the specific task - This addition is currently fixed and not
 // searchable.
-// Next id: 7
+// Next id: 8
 message TaskSpec {
   // required
   // This name must match the name in the label dict in model_fn of estimator.
@@ -108,6 +108,11 @@ message TaskSpec {
   // True is weight feature is in feature dict, otherwise (if in label dict),
   // False.
   optional bool weight_is_a_feature = 5 [default = true];
+
+  // Adding the ability to specify whether or not to apply activation before
+  // adding the appropriate architecture for the task specified in field
+  // architecture above.
+  optional bool apply_activation_on_shared_logits = 7 [default = true];
 }
 
 // Parameters that apply only to the LinearModel search algorithm.
@@ -143,7 +148,8 @@ message ArchitectureReplay {
   repeated TowerSuggestion towers = 1;
 }
 
-// Next id: 49
+
+// Next id: 53
 message PhoenixSpec {
   enum SearchType {
     UNKNOWN_SEARCH_TYPE = 0;
@@ -321,6 +327,10 @@ message PhoenixSpec {
   // The most important task when using multi_task_spec.
   // The loss / prediction of estimator are going to be set to this label.
   optional string primary_task_name = 28;
+  // If set to true, the losses from the multitask above are added to one,
+  // and then optimized. Otherwise, each loss is trained separately (i.e.,
+  // the training is alternating between the various losses optimization).
+  optional bool merge_losses_of_multitask = 52;
 
   // NHWC or NCHW - only applies to cnn problems
   optional string cnn_data_format = 30 [default = "NHWC"];
@@ -351,6 +361,23 @@ message PhoenixSpec {
 
   // Temperature added to predict graph when exporting.
   optional float temperature = 48 [default = 1.0];
+
+
+  // This option gives the user the ability to disallow phoenix from adding
+  // A last dense layer to create the logits that match the problem size.
+  //
+  // This option is to be used if the user can guarantee that the last block
+  // produces logits (i.e. output tensor) with the approprite size.
+  // If unsure, please keep as false.
+  optional bool disable_last_dense_layer = 50 [default = false];
+
+  // Only apply to multitask
+  // If true, we don't infer the label tensor and label weight when passing
+  // them to the loss_fn and metric_fn. We pass the estimator label dict as is.
+  // Note that this requires the user to modify the default loss_fn/metric_fn to
+  // accept a dictionary and calculate the loss based on the tensor in that
+  // dictionary.
+  optional bool pass_label_dict_as_is = 51 [default = false];
 
   // Deprecated tag numbers. Do not reuse.
   reserved 8, 29;

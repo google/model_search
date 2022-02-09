@@ -84,6 +84,11 @@ class ConstrainedDescentTest(parameterized.TestCase, tf.test.TestCase):
         num_blocks_in_cell=4,
         reduction_block_type="AVERAGE_POOL_2X2",
         replicate_cell=replicate_cell,
+        blocks_to_use=[
+            "FIXED_OUTPUT_FULLY_CONNECTED_128",
+            "FIXED_OUTPUT_FULLY_CONNECTED_256",
+            "FIXED_OUTPUT_FULLY_CONNECTED_512",
+        ],
         beam_size=3)
     algorithm = constrained_descent.ConstrainedDescent(spec, self._metadata)
     trials = []
@@ -104,8 +109,8 @@ class ConstrainedDescentTest(parameterized.TestCase, tf.test.TestCase):
     # We use a beam of size 3 and always choose the last trial to be the best.
     self.assertEqual(fork_trial, completed_trials - 3)
     self.assertTrue(
-        search_test_utils.is_mutation_or_equal(actual_architecture,
-                                               expected_architecture))
+        search_test_utils.is_mutation_or_equal(actual_architecture[:4],
+                                               expected_architecture[:4]))
 
 
 if __name__ == "__main__":

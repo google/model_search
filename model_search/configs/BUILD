@@ -7,8 +7,6 @@ package(default_visibility = [
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
-
 filegroup(
     name = "phoenix_configs",
     srcs = [

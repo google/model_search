@@ -17,11 +17,13 @@
 
 import collections
 import os
+import string
 import time
 
+from absl import flags
 from absl import logging
-from model_search import blocks as blocks_lib
-from model_search import blocks_builder as blocks
+from model_search import block as blocks_lib
+from model_search import block_builder
 from model_search import hparam as hp
 from model_search import utils
 from model_search.proto import hparam_pb2
@@ -33,6 +35,12 @@ import tf_slim
 from google.protobuf import text_format
 
 
+flags.DEFINE_bool(
+    "crash_on_warmstart_error", False,
+    "Crashes the binary is we encounter a tensor we are unable "
+    "to warmstart when ensembling.")
+
+FLAGS = flags.FLAGS
 NUMBER_OF_TOWERS = "number_of_towers"
 DROPOUTS = "dropout_rate"
 IS_FROZEN = "is_frozen"
@@ -76,6 +84,10 @@ class DirectoryHandler(object):
     dir_name = os.path.basename(directory)
     if dir_name.isdigit():
       return int(dir_name)
+    elif dir_name.startswith("trial_"):
+      trial_number = dir_name[len("trial_"):]
+      if all(c in string.hexdigits for c in trial_number):
+        return int(int(trial_number, 16) % 1e8)
 
     tfx_trial_prefix = "Trial-"
     dirs = directory.split("/")
@@ -101,7 +113,7 @@ class DirectoryHandler(object):
 
 
 def get_blocks_search_space(blocks_to_use=None):
-  return blocks.Blocks.search_space(blocks_to_use=blocks_to_use)
+  return block_builder.Blocks.search_space(blocks_to_use=blocks_to_use)
 
 
 def get_block_hparams(hparams, block_name):
@@ -126,11 +138,12 @@ def get_hparams_from_dir(model_directory, tower_name):
 def store_hparams_to_dir(hparams, model_directory, tower_name):
   # Removing the "context" hparam. This hparam is added for tpu, by the tpu team
   # It is not compatible with the function "to_proto" used below.
-  copy_hparams = hp.HParams(**hparams.values())
-  if hasattr(copy_hparams, "context"):
-    copy_hparams.del_hparam("context")
-  with tf.io.gfile.GFile(os.path.join(model_directory, tower_name), "w") as f:
-    f.write(str(copy_hparams.to_proto()))
+  if tf.estimator.RunConfig().is_chief:
+    copy_hparams = hp.HParams(**hparams.values())
+    if hasattr(copy_hparams, "context"):
+      copy_hparams.del_hparam("context")
+    with tf.io.gfile.GFile(os.path.join(model_directory, tower_name), "w") as f:
+      f.write(str(copy_hparams.to_proto()))
 
 
 def get_architecture(directory, tower_name="search_generator_0"):
@@ -266,11 +279,11 @@ def fix_architecture_order(architecture, problem_type):
   the architecture as all architectures are valid.
 
   Args:
-    architecture: an iterable of integers or `blocks.BlockType`.
+    architecture: an iterable of integers or `block_builder.BlockType`.
     problem_type: a `PhoenixSpec.ProblemType` enum.
 
   Returns:
-    a list of `blocks.BlockType`.
+    a list of `block_builder.BlockType`.
   """
   # All achitectures are valid in the dnn and rnn case.
   if problem_type != phoenix_spec_pb2.PhoenixSpec.CNN:
@@ -278,23 +291,23 @@ def fix_architecture_order(architecture, problem_type):
 
   output_architecture = []
   flattens = tuple(block for block in architecture
-                   if "FLATTEN" in blocks.BlockType(block).name)
+                   if "FLATTEN" in block_builder.BlockType(block).name)
   if not flattens:
-    output_architecture = [blocks.BlockType.PLATE_REDUCTION_FLATTEN]
+    output_architecture = [block_builder.BlockType.PLATE_REDUCTION_FLATTEN]
     logging.warning("initial_architecture does not have a flattening " "block.")
     logging.info("Adding a Flatten block to the architecture.")
   else:
     output_architecture = [flattens[0]]
 
   for block in architecture:
-    if (block == blocks.BlockType.FLATTEN or
-        block == blocks.BlockType.DOWNSAMPLE_FLATTEN or
-        block == blocks.BlockType.PLATE_REDUCTION_FLATTEN):
+    if (block == block_builder.BlockType.FLATTEN or
+        block == block_builder.BlockType.DOWNSAMPLE_FLATTEN or
+        block == block_builder.BlockType.PLATE_REDUCTION_FLATTEN):
       continue
     output_architecture = increase_structure_depth(
         np.array(output_architecture), block, problem_type)
     output_architecture = [i.item() for i in output_architecture]
-  return [blocks.BlockType(i) for i in output_architecture]
+  return [block_builder.BlockType(i) for i in output_architecture]
 
 
 def increase_structure_depth(previous_architecture, added_block, problem_type):
@@ -308,14 +321,14 @@ def increase_structure_depth(previous_architecture, added_block, problem_type):
 
   Args:
     previous_architecture: the input architecture. An np.array holding
-      `blocks.BlockType` (i.e., holding integers).
-    added_block: a `blocks.BlockType` to add to previous_architecture.
+      `block_builder.BlockType` (i.e., holding integers).
+    added_block: a `block_builder.BlockType` to add to previous_architecture.
     problem_type: a `PhoenixSpec.ProblemType` enum.
 
   Returns:
-    np.array of `blocks.BlockType` (integers).
+    np.array of `block_builder.BlockType` (integers).
   """
-  if added_block == blocks.BlockType.EMPTY_BLOCK:
+  if added_block == block_builder.BlockType.EMPTY_BLOCK:
     return previous_architecture.copy()
   output = previous_architecture.copy()
 
@@ -324,14 +337,14 @@ def increase_structure_depth(previous_architecture, added_block, problem_type):
     return np.append(output, added_block)
 
   # TODO(b/172564129): Change this class (blocks) to a singleton
-  builder = blocks.Blocks()
+  blocks = block_builder.Blocks()
   # CNN case - convolution before fully connected.
-  if not builder[added_block].is_input_order_important:
+  if not blocks[added_block].is_input_order_important:
     return np.append(output, added_block)
   # First block index in which order is not important
   index_for_new_block = next(
       index for index, block in enumerate(previous_architecture)
-      if not builder[block].is_input_order_important)
+      if not blocks[block].is_input_order_important)
   return np.insert(output, index_for_new_block, added_block)
 
 
@@ -371,6 +384,8 @@ def init_variables(checkpoint, original_scope, new_scope):
 
     # The variable is not in the checkpoint
     if normalized not in checkpoint_variables_list:
+      if FLAGS.crash_on_warmstart_error:
+        logging.fatal("Cannot find %s in the checkpoint", normalized)
       logging.info("Cannot find %s in the checkpoint", normalized)
       continue
     # The variable is in the checkpoint but sharded.
@@ -423,10 +438,13 @@ def construct_tower(phoenix_spec,
 
   Args:
     phoenix_spec: The trial's `phoenix_spec_pb2.PhoenixSpec` proto.
-    input_tensor: An input `tf.Tensor` to build the network on top of.
+    input_tensor: An input `tf.Tensor` to build the network on top of. Can be
+      also a list of tensors if the first build block expects a list. If you
+      are using our own default blocks, then using a list will ignore all
+      tensors except of the last one.
     tower_name: a unique name for the tower (string).
-    architecture: np.array of ints (`blocks.BlockType`) with the architecture of
-      the neural network to build.
+    architecture: np.array of ints (`block_builder.BlockType`) with the
+      architecture of the neural network to build.
     is_training: a boolean indicating if we are in training.
     lengths: A `tf.Tensor` with the lengths (dimenions: [batch_size]) holding
       the length of each sequence for sequential problems. Keep as None, for non
@@ -436,52 +454,60 @@ def construct_tower(phoenix_spec,
     hparams: The hparams for the tower.
     model_directory: current trial model directory (a string).
     dropout_rate: a float indicating the rate of dropouts to apply between
-      blocks. Applied only if the value is above zero.
+      block_builder. Applied only if the value is above zero.
     allow_auxiliary_head: Whether to allow importing the tower's auxiliary head,
       if the tower has one. Only applicable for CNNs.
 
   Returns:
     The output `tf.Tensor` of the last layer in the built neural network.
   """
-  blocks_builders = blocks.Blocks()
-  output = [input_tensor]
+  blocks = block_builder.Blocks()
+  if isinstance(input_tensor, list):
+    tf.compat.v1.logging.warning(
+        "Input layer fn is producing a list of tensors. This works with custom "
+        "blocks that expect a list. Otherwise (if you are running our own "
+        "architecture search), this is an error - you must concat all input "
+        "tensors into one. The current run ignores all tensors in the list but "
+        "the last.")
+    output = input_tensor
+  else:
+    output = [input_tensor]
   block_index = 1
   str_signature = ""
-  with tf.compat.v1.variable_scope("Phoenix/{}".format(tower_name)):
-    for block_type in architecture:
-      str_signature += str(block_type)
-      # TODO(b/172564129): Should block_index also be ignored when uniform
-      # average transfer learning? How would we handle repeated blocks, e.g. two
-      # FC layers stacked on top of each other.
-      scope = "{0}_{1}_{2}".format(
-          str(block_index),
-          blocks.BlockType(block_type).name, str_signature)
-      scope = strip_scope(
-          scope, phoenix_spec.transfer_learning_spec.transfer_learning_type,
-          str_signature)
-      with tf.compat.v1.variable_scope(scope):
-        with (arg_scope(
-            DATA_FORMAT_OPS, data_format=phoenix_spec.cnn_data_format)):
-          output = blocks_builders[block_type].build(
-              input_tensors=output,
-              is_training=is_training,
-              lengths=lengths,
-              hparams=get_block_hparams(hparams,
-                                        blocks.BlockType(block_type).name))
-          if dropout_rate and dropout_rate > 0:
-            output[-1] = tf.compat.v1.layers.dropout(
-                output[-1], rate=dropout_rate, training=is_training)
-          block_index += 1
-
-    # Create the logits.
-    scope = "last_dense_{}".format(str_signature)
+  for block_type in architecture:
+    str_signature += str(block_type)
+    # TODO(b/172564129): Should block_index also be ignored when uniform
+    # average transfer learning? How would we handle repeated blocks, e.g. two
+    # FC layers stacked on top of each other.
+    scope = "{0}_{1}_{2}".format(
+        str(block_index),
+        block_builder.BlockType(block_type).name, str_signature)
     scope = strip_scope(
         scope, phoenix_spec.transfer_learning_spec.transfer_learning_type,
         str_signature)
-    with tf.compat.v1.variable_scope(scope):
-      tower_spec = create_tower_spec(phoenix_spec, output, architecture,
-                                     logits_dimension, is_frozen, lengths,
-                                     allow_auxiliary_head)
+    with arg_scope(DATA_FORMAT_OPS, data_format=phoenix_spec.cnn_data_format):
+      output = blocks.get_new(
+          block_builder.BlockType(block_type), override_name=scope)(
+              inputs=output,
+              is_training=is_training,
+              lengths=lengths,
+              hparams=get_block_hparams(
+                  hparams,
+                  block_builder.BlockType(block_type).name))
+      if dropout_rate and dropout_rate > 0:
+        output[-1] = tf.compat.v1.layers.dropout(
+            output[-1], rate=dropout_rate, training=is_training)
+      block_index += 1
+
+  # Create the logits.
+  scope = "last_dense_{}".format(str_signature)
+  scope = strip_scope(
+      scope, phoenix_spec.transfer_learning_spec.transfer_learning_type,
+      str_signature)
+  with tf.compat.v1.variable_scope(scope):
+    tower_spec = create_tower_spec(phoenix_spec, output, architecture,
+                                   logits_dimension, is_frozen, lengths,
+                                   allow_auxiliary_head)
 
   set_architecture(architecture, tower_name)
   set_parameter(tower_name, DROPOUTS,
@@ -628,7 +654,8 @@ def create_tower_spec(phoenix_spec,
   Args:
     phoenix_spec: The trial's `phoenix_spec_pb2.PhoenixSpec` proto.
     inputs: The list of `tf.Tensors` of the tower.
-    architecture: The list of `blocks.BlockType` of the tower architecture.
+    architecture: The list of `block_builder.BlockType` of the tower
+      architecture.
     dimension: int - the output tensor last axis dimension.
     is_frozen: Whether the tower should be frozen.
     lengths: A tensor of shape [batch] holding the sequence length for a
@@ -647,27 +674,41 @@ def create_tower_spec(phoenix_spec,
   logits_weight = 1.0
   aux_logits = None
   aux_logits_weight = None
-  if (phoenix_spec.problem_type ==
-      phoenix_spec_pb2.PhoenixSpec.RNN_ALL_ACTIVATIONS):
-    logits = tf.compat.v1.layers.conv1d(
-        inputs=pre_logits, filters=dimension, kernel_size=1)
+  logits = None
+  if phoenix_spec.disable_last_dense_layer:
+    logits = pre_logits
+    if pre_logits.get_shape().as_list()[-1] != dimension:
+      logging.warning(
+          "PhoenixSpec.disable_last_dense_layer is turned on, "
+          "and we are getting non-consistent logits size from the "
+          "last block. The block is providing tensor with last "
+          "dimension %s, and number of classes is %s",
+          pre_logits.get_shape().as_list()[-1], dimension)
+  elif (phoenix_spec.problem_type ==
+        phoenix_spec_pb2.PhoenixSpec.RNN_ALL_ACTIVATIONS):
+    logits = tf.keras.layers.Dense(dimension, name="conv1d")(pre_logits)
   elif (phoenix_spec.problem_type ==
         phoenix_spec_pb2.PhoenixSpec.RNN_LAST_ACTIVATIONS):
     if lengths is not None:
       logits = utils.last_activations_in_sequence(
-          tf.compat.v1.layers.conv1d(
-              inputs=pre_logits, filters=dimension, kernel_size=1), lengths)
+          tf.keras.layers.Dense(dimension, name="conv1d")(pre_logits))
     else:
       logging.warning("Length is missing for rnn_last problem type.")
       logits = tf.compat.v1.layers.conv1d(
           inputs=pre_logits, filters=dimension, kernel_size=1)
-  elif phoenix_spec.problem_type == phoenix_spec_pb2.PhoenixSpec.CNN:
+  elif (phoenix_spec.problem_type == phoenix_spec_pb2.PhoenixSpec.CNN or
+        phoenix_spec.problem_type == phoenix_spec_pb2.PhoenixSpec.DNN):
     logits = tf.keras.layers.Dense(dimension, name="dense")(pre_logits)
+  else:
+    raise ValueError("phoenix_spec.problem_type must be either DNN, CNN, "
+                     "RNN_LAST_ACTIVATIONS, or RNN_ALL_ACTIVATIONS.")
+
+  if phoenix_spec.problem_type == phoenix_spec_pb2.PhoenixSpec.CNN:
     if allow_auxiliary_head and phoenix_spec.use_auxiliary_head:
       reductions = []
       flattens = []
       for i, block in enumerate(architecture):
-        name = blocks.BlockType(block).name
+        name = block_builder.BlockType(block).name
         if "DOWNSAMPLE" in name or "REDUCTION" in name:
           reductions.append(i)
         # Some blocks reduce and flatten.
@@ -686,11 +727,6 @@ def create_tower_spec(phoenix_spec,
             dimension, name="aux_dense")(
                 inputs[idx])
         aux_logits_weight = phoenix_spec.auxiliary_head_loss_weight
-  elif phoenix_spec.problem_type == phoenix_spec_pb2.PhoenixSpec.DNN:
-    logits = tf.keras.layers.Dense(dimension, name="dense")(pre_logits)
-  else:
-    raise ValueError("phoenix_spec.problem_type must be either DNN, CNN, "
-                     "RNN_LAST_ACTIVATIONS, or RNN_ALL_ACTIVATIONS.")
 
   logits = tf.identity(logits, name="logits")
   if aux_logits is not None:
@@ -705,7 +741,9 @@ def create_tower_spec(phoenix_spec,
   return TowerSpec(
       logits_spec=LogitsSpec(logits, logits_weight, aux_logits,
                              aux_logits_weight),
-      architecture=[blocks.BlockType(block).name for block in architecture],
+      architecture=[
+          block_builder.BlockType(block).name for block in architecture
+      ],
       layer_tensors=all_layer_tensors)
 
 

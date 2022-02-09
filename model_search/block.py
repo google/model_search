@@ -22,7 +22,7 @@ import abc
 import enum
 import functools
 
-import kerastuner
+import keras_tuner
 
 from model_search import registry
 from model_search.ops import svdf_cell
@@ -47,11 +47,24 @@ def get_channel_dim(input_tensor, data_format='INVALID'):
     raise ValueError('Not a valid data_format', data_format)
 
 
-class Block(object, metaclass=abc.ABCMeta):
+class Block(tf.keras.layers.Layer, metaclass=abc.ABCMeta):
   """Block api for creating a new block."""
 
+  def __init__(self, **kwargs):
+    if 'name' in kwargs:
+      super(Block, self).__init__(**kwargs)
+    else:
+      super(Block, self).__init__(name='Block', **kwargs)
+
+  def call(self, inputs, **kwargs):
+    return self.block_build(
+        input_tensors=inputs,
+        is_training=kwargs['is_training'],
+        lengths=kwargs.get('lengths', None),
+        hparams=kwargs.get('hparams', None))
+
   @abc.abstractmethod
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a block for phoenix.
 
     Args:
@@ -79,14 +92,15 @@ class Block(object, metaclass=abc.ABCMeta):
     """Returns a search space of hparams in case the block is tunable.
 
     Returns:
-      kerastuner.engine.hyperparameters.HyperParameters object
+      keras_tuner.HyperParameters object
     """
     return None
 
 
-# NEXT ID: 147
-# NEXT EXPERIMENTAL ID: 10017 (experiment id starts at 10,001)
-register_block = functools.partial(registry.register, base=Block)
+# NEXT ID: 153
+# NEXT EXPERIMENTAL ID: 10018 (experiment id starts at 10,001)
+register_block = functools.partial(
+    registry.register, base=Block, add_name_to_args=True)
 
 # IMPORTANT NOTE:
 # When you use Keras layers with variables, always give them a name!
@@ -115,7 +129,7 @@ register_block = functools.partial(registry.register, base=Block)
     lookup_name='FIXED_CHANNEL_STRIDE_96_2',
     init_args={
         'num_filters': 96,
-        'apply_batch_norm': True,
+        'apply_batch_norm': False,
         'stride': (2, 2)
     },
     enum_id=68)
@@ -123,7 +137,7 @@ register_block = functools.partial(registry.register, base=Block)
     lookup_name='FIXED_CHANNEL_CONVOLUTION_96',
     init_args={
         'num_filters': 96,
-        'apply_batch_norm': True
+        'apply_batch_norm': False
     },
     enum_id=72)
 class FixedChannelConvolutionBlock(Block):
@@ -132,30 +146,33 @@ class FixedChannelConvolutionBlock(Block):
   def __init__(self,
                num_filters=64,
                kernel_size=3,
-               apply_batch_norm=True,
-               stride=(1, 1)):
+               apply_batch_norm=False,
+               stride=(1, 1),
+               **kwargs):
     self._num_filters = num_filters
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
     self._stride = stride
+    super(FixedChannelConvolutionBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     # We always add a layer on the last tensor provided.
     input_tensor = input_tensors[-1]
     # TODO(b/172564129): Revert to keras layers http://b/130791880
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         self._num_filters,
         kernel_size=self._kernel_size,
-        stride=self._stride,
-        padding='same')
+        strides=self._stride,
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
 
     # TODO(b/172564129): give an options to choose relu.
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -165,6 +182,8 @@ class FixedChannelConvolutionBlock(Block):
 
 @register_block(
     lookup_name='CONVOLUTION_3X3', init_args={'kernel_size': 3}, enum_id=4)
+@register_block(
+    lookup_name='CONVOLUTION_4X4', init_args={'kernel_size': 4}, enum_id=147)
 @register_block(
     lookup_name='CONVOLUTION_5X5', init_args={'kernel_size': 5}, enum_id=5)
 @register_block(
@@ -194,23 +213,25 @@ class FixedChannelConvolutionBlock(Block):
 class ConvolutionBlock(Block):
   """Regular convolution layer."""
 
-  def __init__(self, kernel_size=3, apply_batch_norm=True):
+  def __init__(self, kernel_size=3, apply_batch_norm=False, **kwargs):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
+    super(ConvolutionBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
 
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -223,29 +244,35 @@ class ConvolutionBlock(Block):
     init_args={'kernel_size': 3},
     enum_id=12)
 @register_block(
+    lookup_name='INCREASE_CHANNELS_4X4',
+    init_args={'kernel_size': 4},
+    enum_id=150)
+@register_block(
     lookup_name='INCREASE_CHANNELS_5X5',
     init_args={'kernel_size': 5},
     enum_id=13)
 class IncreaseChannelsBlock(Block):
   """Increase the number of channels times two."""
 
-  def __init__(self, kernel_size=3, apply_batch_norm=True):
+  def __init__(self, kernel_size=3, apply_batch_norm=False, **kwargs):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
+    super(IncreaseChannelsBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) * 2,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
 
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -258,31 +285,41 @@ class IncreaseChannelsBlock(Block):
     init_args={'kernel_size': 3},
     enum_id=6)
 @register_block(
+    lookup_name='DOWNSAMPLE_CONVOLUTION_4X4',
+    init_args={'kernel_size': 4},
+    enum_id=148)
+@register_block(
     lookup_name='DOWNSAMPLE_CONVOLUTION_5X5',
     init_args={'kernel_size': 5},
     enum_id=7)
 class DownsampleConvolutionBlock(Block):
   """Downsample with stride and increase channels times two."""
 
-  def __init__(self, kernel_size=3, strides=(2, 2), apply_batch_norm=True):
+  def __init__(self,
+               kernel_size=3,
+               strides=(2, 2),
+               apply_batch_norm=False,
+               **kwargs):
     self._kernel_size = kernel_size
     self._strides = strides
     self._apply_batch_norm = apply_batch_norm
+    super(DownsampleConvolutionBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) * 2,
         kernel_size=self._kernel_size,
-        stride=self._strides,
-        padding='same')
+        strides=self._strides,
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
 
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -297,10 +334,11 @@ class DownsampleConvolutionBlock(Block):
 class AveragePoolBlock(Block):
   """Average Pooling layer."""
 
-  def __init__(self, kernel_size=2):
+  def __init__(self, kernel_size=2, **kwargs):
     self._kernel_size = kernel_size
+    super(AveragePoolBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     if input_tensor.get_shape().as_list()[2] < self._kernel_size:
       return input_tensors
@@ -309,7 +347,6 @@ class AveragePoolBlock(Block):
     return input_tensors + [
         tf.keras.layers.AveragePooling2D(
             pool_size=self._kernel_size,
-            strides=2,
             padding='SAME',
             name='avgpool2d')(input_tensor)
     ]
@@ -322,6 +359,8 @@ class AveragePoolBlock(Block):
 @register_block(
     lookup_name='RESNET_3X3', init_args={'kernel_size': 3}, enum_id=10)
 @register_block(
+    lookup_name='RESNET_4X4', init_args={'kernel_size': 4}, enum_id=149)
+@register_block(
     lookup_name='RESNET_5X5', init_args={'kernel_size': 5}, enum_id=11)
 class ResnetBlock(Block):
   """A Resnet Block - 2 Convolutions with a skip connection.
@@ -329,36 +368,39 @@ class ResnetBlock(Block):
   Note that we do not apply batch normalization or dropouts in the block.
   """
 
-  def __init__(self, kernel_size=3, apply_batch_norm=True):
+  def __init__(self, kernel_size=3, apply_batch_norm=False, **kwargs):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
+    super(ResnetBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Residual unit with 2 sub layers."""
     input_tensor = input_tensors[-1]
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
-    net = tf.nn.leaky_relu(net)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
+    net = tf.nn.relu(net)
 
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            net)
 
     net += input_tensor
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
 
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -435,7 +477,8 @@ class FullyConnectedBlock(Block):
                max_output_size=100,
                max_number_of_parameters=None,
                apply_batch_norm=False,
-               residual_connection_type=None):
+               residual_connection_type=None,
+               **kwargs):
     """Initializes a new FullyConnectedBlock instance.
 
     Args:
@@ -445,12 +488,14 @@ class FullyConnectedBlock(Block):
       residual_connection_type: The ResidualConnectionType to use in the layer.
         Suppose the input is x and the fully connected layer is f. Then this
         block will return y = x + f(x).
+      **kwargs: additional args for keras.Layer.
     """
     self._max_number_of_parameters = max_number_of_parameters
     self._max_output_size = max_output_size
     self._apply_batch_norm = apply_batch_norm
     self._residual_connection_type = (
         residual_connection_type or ResidualConnectionType.NONE)
+    super(FullyConnectedBlock, self).__init__(**kwargs)
 
   def _add_residual_connection(self, input_tensor, output_tensor):
     """Creates the residual connection between the input and the output."""
@@ -482,7 +527,7 @@ class FullyConnectedBlock(Block):
     raise ValueError('Invalid ResidualConnectionType: {}'.format(
         self._residual_connection_type))
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     input_tensor = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = input_tensor
@@ -495,9 +540,9 @@ class FullyConnectedBlock(Block):
         max(min(max_output_size,
                 net.get_shape()[1]), 2), name='dense')(
                     net)
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     if self._apply_batch_norm:
-      net = tf.compat.v1.layers.batch_normalization(net, training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
     net = self._add_residual_connection(input_tensor, net)
     return input_tensors + [net]
 
@@ -540,11 +585,12 @@ class LowRankLayerBlock(Block):
   optional.
   """
 
-  def __init__(self, kernel_rank=1, skip_connect=False):
+  def __init__(self, kernel_rank=1, skip_connect=False, **kwargs):
     self._kernel_rank = kernel_rank
     self._skip_connect = skip_connect
+    super(LowRankLayerBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = tf.keras.layers.Dense(
@@ -553,7 +599,7 @@ class LowRankLayerBlock(Block):
     net = tf.keras.layers.Dense(
         input_tensor.get_shape()[1], name='dense_lowrank_right', use_bias=True)(
             net)
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     if self._skip_connect:
       net += input_tensor
     return input_tensors + [net]
@@ -563,6 +609,10 @@ class LowRankLayerBlock(Block):
     return False
 
 
+@register_block(
+    lookup_name='FIXED_OUTPUT_FULLY_CONNECTED_64',
+    init_args={'output_size': 64},
+    enum_id=151)
 @register_block(
     lookup_name='FIXED_OUTPUT_FULLY_CONNECTED_128',
     init_args={'output_size': 128},
@@ -585,15 +635,15 @@ class FixedOutputFullyConnectedBlock(Block):
     Output number of hidden nodes is fixed and equal to output_size.
   """
 
-  def __init__(self, output_size=100, relu_alpha=0.2):
+  def __init__(self, output_size=100, **kwargs):
     self._output_size = output_size
-    self._relu_alpha = relu_alpha
+    super(FixedOutputFullyConnectedBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = tf.keras.layers.Dense(self._output_size, name='dense')(net)
-    net = tf.nn.leaky_relu(net, alpha=self._relu_alpha)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -627,19 +677,20 @@ class BottleNeckBlock(Block):
   A skip connection is optional.
   """
 
-  def __init__(self, projection_size=32, skip_connect=False):
+  def __init__(self, projection_size=32, skip_connect=False, **kwargs):
     self._projection_size = projection_size
     self._skip_connect = skip_connect
+    super(BottleNeckBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     net = tf.keras.layers.Dense(self._projection_size, name='lower_dim')(net)
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     net = tf.keras.layers.Dense(
         input_tensor.get_shape()[1], name='expand_dim')(
             net)
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     if self._skip_connect:
       net += input_tensor
     return input_tensors + [net]
@@ -653,7 +704,7 @@ class BottleNeckBlock(Block):
 class IdentityBlock(Block):
   """An empty block for when using baysian opt. search algorithm."""
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     return input_tensors
 
   @property
@@ -673,13 +724,17 @@ class FullyConnectedPyramidBlock(Block):
       max_number_of_parameters.
   """
 
-  def __init__(self, max_output_size=100, max_number_of_parameters=None):
+  def __init__(self,
+               max_output_size=100,
+               max_number_of_parameters=None,
+               **kwargs):
     # force the kernel matrix to have less than max_number_of_parameters
     # entries.
     self._max_number_of_parameters = max_number_of_parameters
     self._max_output_size = max_output_size
+    super(FullyConnectedPyramidBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = tf.keras.layers.Flatten(name='flatten')(input_tensor)
     max_output_size = self._max_output_size
@@ -690,7 +745,7 @@ class FullyConnectedPyramidBlock(Block):
     net = tf.keras.layers.Dense(
         min(max_output_size, max(net.get_shape()[1] // 2, 2)), name='dense')(
             net)
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -699,28 +754,30 @@ class FullyConnectedPyramidBlock(Block):
 
 
 @register_block(
+    lookup_name='MAX_POOLING_2X2', init_args={'pool_size': 2}, enum_id=152)
+@register_block(
     lookup_name='MAX_POOLING_3X3', init_args={'pool_size': 3}, enum_id=17)
 @register_block(
     lookup_name='MAX_POOLING_5X5', init_args={'pool_size': 5}, enum_id=18)
 class MaxPoolingBlock(Block):
   """Max Pooling block."""
 
-  def __init__(self, pool_size=2, strides=(1, 1)):
+  def __init__(self, pool_size=2, **kwargs):
     self._pool_size = pool_size
-    self._strides = strides
+    super(MaxPoolingBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Applies 2d max pooling on the input tensor."""
     input_tensor = input_tensors[-1]
     if input_tensor.get_shape().as_list()[2] < self._pool_size:
       return input_tensors
 
-    max_pool = tf_slim.max_pool2d(
-        input_tensor,
-        self._pool_size,
-        stride=self._strides,
-        padding='same',
-    )
+    max_pool = tf.keras.layers.MaxPool2D(
+        pool_size=self._pool_size,
+        name='max2d',
+        padding='same')(
+            input_tensor)
+
     return input_tensors + [max_pool]
 
   @property
@@ -747,25 +804,28 @@ class DilatedConvolutionBlock(Block):
   def __init__(self,
                kernel_size=3,
                dilation_rate=(2, 2),
-               apply_batch_norm=True):
+               apply_batch_norm=False,
+               **kwargs):
     self._kernel_size = kernel_size
     self._dilation_rate = dilation_rate
     self._apply_batch_norm = apply_batch_norm
+    super(DilatedConvolutionBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
-    net = tf_slim.conv2d(
-        input_tensor,
+    net = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same',
-        rate=self._dilation_rate)
+        dilation_rate=self._dilation_rate,
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
     # Batch norm
     if self._apply_batch_norm:
-      net = tf_slim.batch_norm(net, is_training=is_training)
+      net = tf.keras.layers.BatchNormalization(name='batch_normalization')(net)
 
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -777,7 +837,7 @@ class DilatedConvolutionBlock(Block):
 class FlattenBlock(Block):
   """Flattens the input."""
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     return input_tensors + [
         tf.keras.layers.Flatten(name='flatten')(input_tensor)
@@ -792,12 +852,17 @@ class FlattenBlock(Block):
 class DownsampleFlattenBlock(Block):
   """Flattens the input by downsampling till the plate is 1x1."""
 
-  def __init__(self, kernel_size=2, strides=(2, 2), max_channels=1000):
+  def __init__(self,
+               kernel_size=2,
+               strides=(2, 2),
+               max_channels=1000,
+               **kwargs):
     self._kernel_size = kernel_size
     self._strides = strides
     self._max_channels = max_channels
+    super(DownsampleFlattenBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a cnn tower with flatten at the top.
 
     Args:
@@ -808,23 +873,26 @@ class DownsampleFlattenBlock(Block):
 
     Returns:
       A cnn tower, where each cnn reduce the plate (with strides) and
-      increase the number of channels by two. leaky_relu is applied between
+      increase the number of channels by two. relu is applied between
       cnn blocks and the number of channels is limitied to max_channels
     """
     input_tensor = input_tensors[-1]
     net = input_tensor
     while True:
-      plate_dimension = net.get_shape()[2]
+      plate_dimension = min(net.get_shape()[2], net.get_shape()[1])
       if plate_dimension < self._kernel_size:
         break
+      if net.get_shape()[3] > 300:
+        break
 
-      net = tf_slim.conv2d(
-          net,
+      net = tf.keras.layers.Conv2D(
           min(get_channel_dim(net) * 2, self._max_channels),
           kernel_size=self._kernel_size,
-          stride=self._strides,
-          padding='same')
-      net = tf.nn.leaky_relu(net)
+          strides=self._strides,
+          name='conv2d',
+          padding='same')(
+              net)
+      net = tf.nn.relu(net)
 
     net = tf.keras.layers.Flatten(name='flatten')(net)
     return input_tensors + [net]
@@ -838,46 +906,51 @@ class DownsampleFlattenBlock(Block):
 class DualResnetBlock(Block):
   """Residual unit with 2 sub layers."""
 
-  def __init__(self, kernel_size=3):
+  def __init__(self, kernel_size=3, **kwargs):
     self._kernel_size = kernel_size
+    super(DualResnetBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Returns a ReLU activated output of a residual unit with 2 sub layers."""
     input_tensor = input_tensors[-1]
-    net1 = tf_slim.conv2d(
-        input_tensor,
+    net1 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
-    net = tf.nn.leaky_relu(net1)
+    net = tf.nn.relu(net1)
 
-    net1 = tf_slim.conv2d(
-        net,
+    net1 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            net)
 
-    net2 = tf_slim.conv2d(
-        input_tensor,
+    net2 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
-    net = tf.nn.leaky_relu(net2)
+    net = tf.nn.relu(net2)
 
-    net2 = tf_slim.conv2d(
-        net,
+    net2 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor),
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            net)
 
     net1 /= 2
     net2 /= 2
     input_tensor += net1
     input_tensor += net2
 
-    net = tf.nn.leaky_relu(input_tensor)
+    net = tf.nn.relu(input_tensor)
     return input_tensors + [net]
 
   @property
@@ -889,57 +962,64 @@ class DualResnetBlock(Block):
 class GeneralBlock(Block):
   """A general block; This block is custom made."""
 
-  def __init__(self, kernel_size=3, apply_batch_norm=True):
+  def __init__(self, kernel_size=3, apply_batch_norm=False, **kwargs):
     self._kernel_size = kernel_size
     self._apply_batch_norm = apply_batch_norm
+    super(GeneralBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Custom (wide) convolution block with some pooling."""
     # Guard so that we won't have zero channels
     input_tensor = input_tensors[-1]
     if get_channel_dim(input_tensor) < 6:
       return input_tensors
 
-    reduced = tf_slim.conv2d(
-        input_tensor,
+    reduced = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=1,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            input_tensor)
 
-    reduced_with_activation = tf.nn.leaky_relu(reduced)
+    reduced_with_activation = tf.nn.relu(reduced)
 
     # Batch norm
     if self._apply_batch_norm:
-      reduced_with_activation = tf_slim.batch_norm(
-          reduced_with_activation, is_training=is_training)
+      reduced_with_activation = tf.keras.layers.BatchNormalization(
+          name='batch_normalization')(
+              reduced_with_activation)
 
-    convo1 = tf_slim.conv2d(
-        reduced_with_activation,
+    convo1 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            reduced_with_activation)
 
-    convo1 = tf.nn.leaky_relu(convo1)
+    convo1 = tf.nn.relu(convo1)
 
-    convo1 = tf_slim.conv2d(
-        convo1,
+    convo1 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            convo1)
 
-    convo2 = tf_slim.conv2d(
-        reduced_with_activation,
+    convo2 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            reduced_with_activation)
 
-    convo2 = tf.nn.leaky_relu(convo2)
+    convo2 = tf.nn.relu(convo2)
 
-    convo2 = tf_slim.conv2d(
-        convo2,
+    convo2 = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            convo2)
 
     avg_pool = tf.keras.layers.AveragePooling2D(
         strides=1,
@@ -948,26 +1028,29 @@ class GeneralBlock(Block):
         name='avgpool2d')(
             reduced_with_activation)
 
-    avg_pool = tf_slim.conv2d(
-        avg_pool,
+    avg_pool = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            avg_pool)
 
-    max_pool = tf_slim.max_pool2d(
-        reduced_with_activation,
-        self._kernel_size,
-        stride=(1, 1),
-        padding='same')
+    max_pool = tf.keras.layers.MaxPool2D(
+        pool_size=self._kernel_size,
+        strides=(1, 1),
+        name='max2d',
+        padding='same')(
+            reduced_with_activation)
 
-    max_pool = tf_slim.conv2d(
-        max_pool,
+    max_pool = tf.keras.layers.Conv2D(
         get_channel_dim(input_tensor) // 5,
         kernel_size=self._kernel_size,
-        padding='same')
+        name='conv2d',
+        padding='same')(
+            max_pool)
 
     net = tf.concat([convo1, convo2, avg_pool, max_pool, reduced], axis=3)
-    net = tf.nn.leaky_relu(net)
+    net = tf.nn.relu(net)
     return input_tensors + [net]
 
   @property
@@ -979,7 +1062,7 @@ class GeneralBlock(Block):
 class PlateReductionFlatten(Block):
   """Mean of plate."""
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     if len(input_tensors[-1].get_shape().as_list()) == 2:
       return input_tensors
     return input_tensors + [
@@ -1048,11 +1131,12 @@ def _add_projection_if_needed(inputs, outputs):
 class RnnBlock(Block):
   """A basic rnn cell."""
 
-  def __init__(self, output_size=100, skip=False):
+  def __init__(self, output_size=100, skip=False, **kwargs):
     self._output_size = output_size
     self._skip = skip
+    super(RnnBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a basic rnn block.
 
     Args:
@@ -1065,10 +1149,11 @@ class RnnBlock(Block):
       output tensor
     """
     input_tensor = input_tensors[-1]
-    rnn_cell = tf.compat.v1.nn.rnn_cell.BasicRNNCell(
-        num_units=self._output_size, activation=tf.nn.tanh)
-    net, _ = tf.compat.v1.nn.dynamic_rnn(
-        rnn_cell, input_tensor, sequence_length=lengths, dtype=tf.float32)
+
+    rnn_cell = tf.keras.layers.SimpleRNNCell(self._output_size, name='rnn_cell')
+    net = tf.keras.layers.RNN(
+        rnn_cell, return_sequences=True, name='rnn')(
+            input_tensor)
 
     if self._skip:
       net += _add_projection_if_needed(input_tensor, net)
@@ -1136,15 +1221,17 @@ class Conv1DBlock(Block):
                kernel_size=1,
                activation=None,
                skip=False,
-               dilation_rate=1):
+               dilation_rate=1,
+               **kwargs):
     assert kernel_size > 0
     self._output_size = output_size
     self._kernel_size = kernel_size
     self._activation = activation
     self._skip = skip
     self._dilation_rate = dilation_rate
+    super(Conv1DBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds a one dimensional convolutional block.
 
     Args:
@@ -1160,13 +1247,15 @@ class Conv1DBlock(Block):
       self._activation = tf.compat.v1.nn.relu
 
     input_tensor = input_tensors[-1]
-    net = tf.compat.v1.layers.conv1d(
-        inputs=input_tensor,
-        filters=self._output_size,
-        kernel_size=self._kernel_size,
-        activation=self._activation,
+
+    net = tf.keras.layers.Conv1D(
+        self._output_size,
+        self._kernel_size,
+        padding='same',
         dilation_rate=self._dilation_rate,
-        padding='same')
+        activation=self._activation,
+        name='conv1d')(
+            input_tensor)
 
     if self._skip:
       net += _add_projection_if_needed(input_tensor, net)
@@ -1561,12 +1650,14 @@ class SvdfBlock(Block):
                memory_size=10,
                rank=1,
                projection_size=0,
-               fashion=SvdfImplementationFashion.SVDF_RNN_CELL):
+               fashion=SvdfImplementationFashion.SVDF_RNN_CELL,
+               **kwargs):
     self._output_size = output_size
     self._memory_size = memory_size
     self._projection_size = projection_size
     self._rank = rank
     self._fashion = fashion
+    super(SvdfBlock, self).__init__(**kwargs)
 
   def _get_svdf_rnn_cell_output(self, input_tensor, lengths):
     svdf = svdf_cell.SvdfCell(
@@ -1589,7 +1680,7 @@ class SvdfBlock(Block):
     layer_output = svdf_conv_layer(input_tensor)
     return layer_output
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     if self._fashion == SvdfImplementationFashion.SVDF_CONV:
       net = self._get_svdf_conv_output(input_tensor)
@@ -1629,7 +1720,7 @@ class TunableSvdfBlock(Block):
     layer_output = svdf_conv_layer(input_tensor)
     return layer_output
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     input_tensor = input_tensors[-1]
     net = self._get_svdf_conv_output(input_tensor, hparams)
 
@@ -1644,7 +1735,7 @@ class TunableSvdfBlock(Block):
     return True
 
   def requires_hparams(self):
-    hps = kerastuner.engine.hyperparameters.HyperParameters()
+    hps = keras_tuner.HyperParameters()
     hps.Int('output_size', 50, 100)
     hps.Int('memory_size', 4, 32)
     hps.Int('rank', 1, 3)
@@ -1699,11 +1790,12 @@ class TunableSvdfBlock(Block):
 class LSTMBlock(Block):
   """An LSTM block for sequential input."""
 
-  def __init__(self, output_size=100, skip=False):
+  def __init__(self, output_size=100, skip=False, **kwargs):
     self._output_size = output_size
     self._skip = skip
+    super(LSTMBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds as LSTM block.
 
     Args:
@@ -1716,10 +1808,12 @@ class LSTMBlock(Block):
       output tensor
     """
     input_tensor = input_tensors[-1]
-    rnn_cell = tf.compat.v1.nn.rnn_cell.LSTMCell(
-        num_units=self._output_size, activation=tf.nn.tanh)
-    net, _ = tf.compat.v1.nn.dynamic_rnn(
-        rnn_cell, input_tensor, sequence_length=lengths, dtype=tf.float32)
+
+    lstm = tf.keras.layers.LSTMCell(self._output_size, name='lstm_cell')
+
+    net = tf.keras.layers.RNN(
+        lstm, return_sequences=True, name='lstm')(
+            input_tensor)
 
     if self._skip:
       net += _add_projection_if_needed(input_tensor, net)
@@ -1778,11 +1872,12 @@ class LSTMBlock(Block):
 class BidirectionalLSTMBlock(Block):
   """An Bidirectional LSTM block for sequential input."""
 
-  def __init__(self, output_size=100, skip=False):
+  def __init__(self, output_size=100, skip=False, **kwargs):
     self._output_size = output_size
     self._skip = skip
+    super(BidirectionalLSTMBlock, self).__init__(**kwargs)
 
-  def build(self, input_tensors, is_training, lengths=None, hparams=None):
+  def block_build(self, input_tensors, is_training, lengths=None, hparams=None):
     """Builds as LSTM block.
 
     Args:
@@ -1795,16 +1890,16 @@ class BidirectionalLSTMBlock(Block):
       output tensor
     """
     input_tensor = input_tensors[-1]
-    fw_rnn_cell = tf.compat.v1.nn.rnn_cell.LSTMCell(
-        num_units=self._output_size, activation=tf.nn.tanh)
-    bw_rnn_cell = tf.compat.v1.nn.rnn_cell.LSTMCell(
-        num_units=self._output_size, activation=tf.nn.tanh)
-    (out1, out2), _ = tf.compat.v1.nn.bidirectional_dynamic_rnn(
-        fw_rnn_cell,
-        bw_rnn_cell,
-        input_tensor,
-        sequence_length=lengths,
-        dtype=tf.float32)
+
+    lstm1 = tf.keras.layers.LSTMCell(self._output_size, name='lstm_cell_f')
+    lstm2 = tf.keras.layers.LSTMCell(self._output_size, name='lstm_cell_b')
+
+    out1 = tf.keras.layers.RNN(
+        lstm1, return_sequences=True, name='lstm')(
+            input_tensor)
+    out2 = tf.keras.layers.RNN(
+        lstm2, return_sequences=True, go_backwards=True, name='lstm')(
+            input_tensor)
 
     net = tf.concat([out1, out2], axis=2)
     if self._skip:

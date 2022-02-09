@@ -11,34 +11,34 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for model_search.blocks_builder."""
+"""Tests for model_search.block_builder."""
 
-from model_search import blocks_builder
+from model_search import block_builder
 import tensorflow.compat.v2 as tf
 
 
 class BlocksBuilderTest(tf.test.TestCase):
 
   def test_constructor(self):
-    blocks = blocks_builder.Blocks()
+    blocks = block_builder.Blocks()
     input_tensor = tf.zeros([3, 32, 32, 3])
-    block_type = blocks_builder.BlockType.FIXED_CHANNEL_CONVOLUTION_16
-    _ = blocks[block_type].build([input_tensor], is_training=True)
+    block_type = block_builder.BlockType.FIXED_CHANNEL_CONVOLUTION_16
+    _ = blocks[block_type].block_build([input_tensor], is_training=True)
 
   def test_all_blocks_are_there(self):
-    blocks = blocks_builder.Blocks()
-    for block_type in blocks_builder.BlockType:
-      if block_type == blocks_builder.BlockType.EMPTY_BLOCK:
+    blocks = block_builder.Blocks()
+    for block_type in block_builder.BlockType:
+      if block_type == block_builder.BlockType.EMPTY_BLOCK:
         continue
       blocks[block_type]  # pylint: disable=pointless-statement
 
   def test_blocks_search_space(self):
-    hps = blocks_builder.Blocks.search_space()
+    hps = block_builder.Blocks.search_space()
     self.assertIn("TUNABLE_SVDF_output_size", hps)
     self.assertIn("TUNABLE_SVDF_rank", hps)
     self.assertIn("TUNABLE_SVDF_projection_size", hps)
     self.assertIn("TUNABLE_SVDF_memory_size", hps)
-    hps = blocks_builder.Blocks.search_space(["TUNABLE_SVDF"])
+    hps = block_builder.Blocks.search_space(["TUNABLE_SVDF"])
     self.assertIn("TUNABLE_SVDF_output_size", hps)
     self.assertIn("TUNABLE_SVDF_rank", hps)
     self.assertIn("TUNABLE_SVDF_projection_size", hps)
@@ -47,9 +47,8 @@ class BlocksBuilderTest(tf.test.TestCase):
   def test_naming_of_tunable(self):
     # If this test is failing, it is because the user have registered two
     # tunable blocks with names that substrings of one another.
-    blocks = blocks_builder.Blocks()
     names = []
-    for k, v in blocks._block_builders.items():
+    for k, v in block_builder._block_builders.items():
       if v is not None:
         hps = v.requires_hparams()
         if hps:

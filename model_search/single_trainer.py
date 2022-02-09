@@ -13,7 +13,7 @@
 # limitations under the License.
 """A small wrapper to run our library when working on a single machine."""
 
-import kerastuner
+import keras_tuner
 from model_search import oss_trainer_lib
 from model_search import phoenix
 from model_search.proto import phoenix_spec_pb2
@@ -51,6 +51,7 @@ class SingleTrainer(object):
       experiment_name: A string identifier for the run.
       experiment_owner: A string identifier of the user making the run.
     """
+
     loss_fn, metric_fn, predictions_fn = (
         oss_trainer_lib.loss_and_metric_and_predictions_fn(self._data))
     phoenix_instance = phoenix.Phoenix(
@@ -64,7 +65,7 @@ class SingleTrainer(object):
         predictions_fn=predictions_fn,
         metadata=None)
 
-    self._oracle = kerastuner.tuners.bayesian.BayesianOptimizationOracle(
+    self._oracle = keras_tuner.oracles.BayesianOptimizationOracle(
         objective="loss",
         hyperparameters=phoenix.Phoenix.get_keras_hyperparameters_space(
             self._spec, train_steps),

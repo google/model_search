@@ -16,7 +16,10 @@
 from absl import flags
 
 from model_search.data import data
+import numpy as np
+import pandas as pd
 import tensorflow.compat.v2 as tf
+
 
 flags.DEFINE_integer('label_index', 0,
                      'The index of the label column in the csv.')
@@ -29,6 +32,8 @@ flags.DEFINE_string(
     'The comma separated list of floats for defaults (every column).')
 
 flags.DEFINE_string('filename', '', 'The filename of the csv file.')
+flags.DEFINE_string('validation_filename', None,
+                    'The filename of the csv file.')
 
 flags.DEFINE_string('field_delim', ',', 'The delimiter used in the csv file.')
 
@@ -41,6 +46,7 @@ class Provider(data.Provider):
 
   def __init__(self):
     self._filename = FLAGS.filename
+    self._validation_filename = FLAGS.validation_filename
     self._logits_dimension = FLAGS.logits_dimension
     self._record_defaults = [float(i) for i in FLAGS.record_defaults.split(',')]
     self._field_delim = FLAGS.field_delim
@@ -52,6 +58,9 @@ class Provider(data.Provider):
     if '${TEST_SRCDIR}' in self._filename:
       self._filename = self._filename.replace('${TEST_SRCDIR}',
                                               FLAGS.test_srcdir)
+    if '${TEST_SRCDIR}' in self._validation_filename:
+      self._validation_filename = self._validation_filename.replace(
+          '${TEST_SRCDIR}', FLAGS.test_srcdir)
 
   def get_input_fn(self, hparams, mode, batch_size):
     """See `data.Provider` get_input_fn."""
@@ -60,9 +69,12 @@ class Provider(data.Provider):
     def input_fn(params=None):
       """Provides batches of data."""
       del params
+      filename = self._filename
+      if self._validation_filename and mode != tf.estimator.ModeKeys.TRAIN:
+        filename = self._validation_filename
 
       features_dataset = tf.data.experimental.CsvDataset(
-          self._filename,
+          filename,
           record_defaults=self._record_defaults,
           header=True,
           field_delim=self._field_delim,
@@ -114,3 +126,22 @@ class Provider(data.Provider):
         tf.feature_column.numeric_column(key=key) for key in features
     ]
     return feature_columns
+
+  def get_keras_input(self, batch_size):
+    """Returns keras input as explained in data.py module."""
+    del batch_size
+    dataset = pd.read_csv(self._filename)
+    labels = dataset.pop(dataset.columns.values[self._label_index])
+    labels = np.array(labels)
+    features = np.array(dataset)
+
+    validation_features = None
+    validation_labels = None
+    if self._validation_filename:
+      validation_data = pd.read_csv(self._validation_filename)
+      validation_labels = validation_data.pop(
+          validation_data.columns.values[self._label_index])
+      validation_labels = np.array(validation_labels)
+      validation_features = np.array(validation_data)
+
+    return features, labels, (validation_features, validation_labels)

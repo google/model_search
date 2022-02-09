@@ -15,7 +15,7 @@
 
 from absl import logging
 
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search.architecture import architecture_utils
 from model_search.search import common
 from model_search.search import search_algorithm
@@ -45,8 +45,13 @@ class CoordinateDescent(search_algorithm.SearchAlgorithm):
 
     # No feasible trials yet.
     if not best_trials:
-      return common.encode_architecture(hparams.initial_architecture,
-                                        self._phoenix_spec.problem_type), None
+      # Getting random architecture here instead of initial_architecture since
+      # efficiency check requires the search to have a non-deterministic
+      # component
+      return common.encode_architecture(
+          common.get_random_architecture(self._phoenix_spec.blocks_to_use,
+                                         self._phoenix_spec.minimum_depth),
+          self._phoenix_spec.problem_type), None
 
     # Increase depth if possible.
     best_architecture, best_trial = (
@@ -58,7 +63,8 @@ class CoordinateDescent(search_algorithm.SearchAlgorithm):
     logging.info("Maximal depth allowed: %d", allowed_depth)
     explore_mode = common.random(
         self._phoenix_spec.increase_complexity_probability)
-    new_block = blocks.BlockType[hparams.new_block_type]
+    new_block = block_builder.BlockType[common.get_random_block(
+        self._phoenix_spec.blocks_to_use)]
 
     if best_architecture.size < allowed_depth and explore_mode:
       common.write_fork_edge(model_dir, my_trial_id, best_trial)
@@ -70,7 +76,9 @@ class CoordinateDescent(search_algorithm.SearchAlgorithm):
     logging.info("using evolution")
 
     output_architecture = common.mutate_replace(best_architecture, new_block)
-    output_architecture = [blocks.BlockType(x) for x in output_architecture]
+    output_architecture = [
+        block_builder.BlockType(x) for x in output_architecture
+    ]
     common.write_fork_edge(model_dir, my_trial_id, best_trial)
     return np.array(
         architecture_utils.fix_architecture_order(

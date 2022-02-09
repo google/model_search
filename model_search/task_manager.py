@@ -21,11 +21,20 @@ and training_ops.
 
 import collections
 import functools
+import inspect
 
 from absl import logging
-from model_search import blocks_builder as blocks
+from model_search import block_builder
+from model_search import ensembler
 from model_search.architecture import architecture_utils
+from model_search.architecture import tower
+from model_search.ensembler import EnsembleLogits
+from model_search.generators import base_tower_generator
+from model_search.generators import trial_utils
+from model_search.meta import distillation
+
 import numpy as np
+
 import tensorflow.compat.v2 as tf
 
 _OPTIMIZERS = {
@@ -40,6 +49,19 @@ _OPTIMIZERS = {
     "rmsprop":
         tf.compat.v1.train.RMSPropOptimizer,
 }
+
+
+def extract_task_specific(instance, task_name):
+  output = instance
+  if isinstance(instance, dict):
+    return instance[task_name]
+  return output
+
+
+def supply_params_if_needed(instance, params):
+  if "params" in inspect.signature(instance).parameters:
+    return functools.partial(instance, params=params)
+  return instance
 
 
 def _get_optimizer_fn(optimizer,
@@ -83,16 +105,24 @@ def _get_optimizer_fn(optimizer,
   return optimizer_fn
 
 
-TaskSpec = collections.namedtuple(
-    "TaskSpec", ["name", "logits", "loss", "train_op_list", "train_hooks_list"])
+TaskSpec = collections.namedtuple("TaskSpec", [
+    "name", "logits", "loss", "train_op_list", "train_hooks_list",
+    "train_losses"
+])
 
 
 class ModelSpec(
-    collections.namedtuple("ModelSpec",
-                           ["loss", "train_op", "predictions", "train_hooks"])):
+    collections.namedtuple(
+        "ModelSpec",
+        ["loss", "train_op", "predictions", "train_hooks", "eval_logits"])):
   """Definition of model training."""
 
-  def __new__(cls, loss, train_op, predictions, train_hooks=None):
+  def __new__(cls,
+              loss,
+              train_op,
+              predictions,
+              train_hooks=None,
+              eval_logits=None):
     if train_hooks is None:
       train_hooks = []
     return super(ModelSpec, cls).__new__(
@@ -100,7 +130,8 @@ class ModelSpec(
         loss=loss,
         train_op=train_op,
         predictions=predictions,
-        train_hooks=train_hooks)
+        train_hooks=train_hooks,
+        eval_logits=eval_logits)
 
 
 def _compute_tolerance(workers):
@@ -208,26 +239,138 @@ def eval_op_fn(loss):
   return tf.no_op(), []
 
 
-class TaskManager(object):
-  """Generates TaskSpecs for various tasks in Phoenix."""
+class Task(tower.Tower):
+  """A simple object to capture a task head (tower)."""
 
-  def __init__(self, phoenix_spec):
-    self._phoenix_spec = phoenix_spec
-    self._ensemble_spec = phoenix_spec.ensemble_spec
+  def __init__(self,
+               phoenix_spec,
+               tower_name,
+               architecture,
+               is_training,
+               logits_dimension,
+               is_frozen,
+               hparams,
+               model_directory,
+               generator_name=None):
+    super(Task, self).__init__(
+        phoenix_spec=phoenix_spec,
+        tower_name=tower_name,
+        architecture=architecture,
+        is_training=is_training,
+        logits_dimension=logits_dimension,
+        is_frozen=is_frozen,
+        hparams=hparams,
+        model_directory=model_directory,
+        dropout_rate=None,
+        allow_auxiliary_head=False)
+    self._generator_name = generator_name
+
+  # Please use this factory method to create a task tower.
+  @staticmethod
+  def get_task(phoenix_spec,
+               tower_name,
+               architecture,
+               is_training,
+               logits_dimesnion,
+               is_frozen,
+               hparams,
+               model_directory,
+               generator_name=None,
+               previous_tower_name=None,
+               previous_model_dir=None):
+    # Building from checkpoint - no need to boostrap models
+    if (tf.train.latest_checkpoint(model_directory) or
+        generator_name == base_tower_generator.SEARCH_GENERATOR or
+        architecture.size == 0):
+      task_ = Task(
+          phoenix_spec=phoenix_spec,
+          tower_name=tower_name,
+          architecture=architecture,
+          is_training=is_training,
+          logits_dimension=logits_dimesnion,
+          is_frozen=is_frozen,
+          hparams=hparams,
+          model_directory=model_directory,
+          generator_name=generator_name)
+      if (architecture.size == 0 and
+          not tf.train.latest_checkpoint(model_directory) and
+          generator_name != base_tower_generator.SEARCH_GENERATOR):
+        task_.add_initialization(
+            prev_model_dir=previous_model_dir,
+            prev_tower_name=previous_tower_name)
+      return task_
+    else:
+      return Task.load(
+          phoenix_spec=phoenix_spec,
+          original_tower_name=previous_tower_name,
+          new_tower_name=tower_name,
+          model_directory=previous_model_dir,
+          new_model_directory=model_directory,
+          is_training=is_training,
+          logits_dimension=logits_dimesnion,
+          force_freeze=True,
+          allow_auxiliary_head=False,
+          skip_initialization=False)
+
+  def call(self, inputs, training):
+    if self._construct_architecture.size:
+      return super(Task, self).call(inputs, training)
+
+    # No architecture
+    logits = self._add_projection_if_needed(inputs, self._logits_dimension)
+
+    # Load the kernel of the additional layer if it is already trained model
+    if (not tf.train.latest_checkpoint(self._model_directory) and
+        hasattr(self, "_prev_model_dir") and hasattr(self, "_prev_tower_name")):
+      architecture_utils.init_variables(
+          tf.train.latest_checkpoint(self._prev_model_dir),
+          "Phoenix/{}".format(self._prev_tower_name),
+          "Phoenix/{}".format(self._tower_name))
+    self._logits_spec = architecture_utils.LogitsSpec(logits=logits)
+    self._architecture = [
+        block_builder.BlockType(block).name
+        for block in self._construct_architecture
+    ]
+    self._layer_tensors = None  # We don't need the tensors here
+    return logits
 
   def _add_projection_if_needed(self, logits, number_of_classes):
     if logits.get_shape().as_list()[-1] == number_of_classes:
       return logits
     else:
-      return tf.keras.layers.Dense(number_of_classes)(tf.nn.relu(logits))
+      return tf.keras.layers.Dense(
+          number_of_classes, name="maybe_project")(
+              logits)
 
-  def _create_task_spec(self, labels, weights, train_logits_specs,
-                        eval_logits_spec, train_op_fn, name, mode, loss_fn):
+
+class TaskManager(object):
+  """Generates TaskSpecs for various tasks in Phoenix."""
+
+  def __init__(self, phoenix_spec, logits_dimension, loss_fn, head):
+    self._phoenix_spec = phoenix_spec
+    self._ensemble_spec = phoenix_spec.ensemble_spec
+    self._ensembler = ensembler.Ensembler(phoenix_spec)
+    self._distiller = distillation.Distiller(phoenix_spec.distillation_spec)
+    self._logits_dimension = logits_dimension
+    self._loss_fn = loss_fn
+    self._head = head
+
+  def _create_task_spec(self,
+                        labels,
+                        weights,
+                        train_logits_specs,
+                        eval_logits_spec,
+                        train_op_fn,
+                        name,
+                        mode,
+                        loss_fn,
+                        add_train_ops=True):
     """Creates the task spec for a task."""
     train_op_list = []
     hooks_list = []
     eval_loss = None
     eval_logits = eval_logits_spec.logits
+    train_losses = []
     for spec in train_logits_specs:
       if mode != tf.estimator.ModeKeys.PREDICT:
         loss = loss_fn(labels=labels, logits=spec.logits, weights=weights)
@@ -244,9 +387,13 @@ class TaskManager(object):
           aux_loss = loss_fn(
               labels=labels, logits=spec.aux_logits, weights=weights)
           loss += spec.aux_logits_weight * aux_loss
-        train_op, train_hooks = train_op_fn(loss)
-        train_op_list.append(train_op)
-        hooks_list.extend(train_hooks)
+
+        if add_train_ops:
+          train_op, train_hooks = train_op_fn(loss)
+          train_op_list.append(train_op)
+          hooks_list.extend(train_hooks)
+
+        train_losses.append(loss)
 
     # The loss to display in tensorboard. Display loss even then training
     # logits is an empty list. I.e., no parameters to train.
@@ -258,19 +405,112 @@ class TaskManager(object):
         logits=eval_logits,
         loss=eval_loss,
         train_op_list=train_op_list,
-        train_hooks_list=hooks_list)
+        train_hooks_list=hooks_list,
+        train_losses=train_losses)
+
+  def _get_loss_fn(self,
+                   original_loss_fn,
+                   features,
+                   mode,
+                   my_id,
+                   teacher_logits_spec=None):
+    """Gets the applicable loss_fn to use.
+
+    If head is not None, wraps the head's loss function to match the interface
+    Phoenix expects (see loss_fns.py), unless distillation is being used.
+
+    Args:
+      original_loss_fn: The original loss_fn from the user.
+      features: The features pass to model_fn.
+      mode: The mode passed to model_fn.
+      my_id: My trial id (integer).
+      teacher_logits_spec: Logits of the teacher network to use when distilling.
+
+    Returns:
+      The loss_fn to use.
+
+    Raises:
+      RuntimeError if unable to find the loss function in the head object.
+    """
+
+    if (mode == tf.estimator.ModeKeys.TRAIN and
+        teacher_logits_spec is not None):
+      return distillation.get_distillation_loss_fn(
+          teacher_logits=teacher_logits_spec.logits,
+          distillation_spec=self._phoenix_spec.distillation_spec,
+          my_id=my_id,
+          original_loss_fn=original_loss_fn)
+
+    if not self._head:
+      return original_loss_fn
+
+    def head_loss_fn(labels, logits, weights=1.0):
+      """Create a loss fn from the Head object."""
+      del weights  # Head already has weights built in.
+
+      training_loss = None
+      # There is two types of head, and their api is different.
+      if getattr(self._head, "loss", None) is not None:
+        training_loss = self._head.loss(
+            labels=labels, logits=logits, features=features, mode=mode)
+      elif getattr(self._head, "create_loss", None) is not None:
+        training_loss = self._head.create_loss(
+            labels=labels, logits=logits, features=features,
+            mode=mode).training_loss
+      else:
+        raise RuntimeError("unable to find loss function in Head object.")
+
+      return training_loss
+
+    return head_loss_fn
+
+  def get_train_and_eval_logits(self, towers, trial_mode):
+    """Helper function to get the various logits for a task."""
+    priors_logits_specs = []
+    search_logits_specs = []
+    if base_tower_generator.SEARCH_GENERATOR in towers.keys():
+      search_logits_specs = [
+          t.logits_spec for t in towers[base_tower_generator.SEARCH_GENERATOR]
+      ]
+    if base_tower_generator.PRIOR_GENERATOR in towers.keys():
+      priors_logits_specs = [
+          t.logits_spec for t in towers[base_tower_generator.PRIOR_GENERATOR]
+      ]
+    if base_tower_generator.REPLAY_GENERATOR in towers.keys():
+      priors_logits_specs = [
+          t.logits_spec for t in towers[base_tower_generator.REPLAY_GENERATOR]
+      ]
+
+    teacher_logits = None
+    if trial_mode == trial_utils.TrialMode.ENSEMBLE_SEARCH:
+      ensemble_logits = self._ensembler.bundle_logits(
+          priors_logits_specs=priors_logits_specs,
+          search_logits_specs=search_logits_specs,
+          logits_dimension=self._logits_dimension)
+    elif trial_mode == trial_utils.TrialMode.DISTILLATION:
+      # TODO(b/146067345): Initialize some random architecture if search
+      # logits specs is empty.
+      ensemble_logits = self._distiller.bundle_logits(
+          priors_logits_specs=priors_logits_specs,
+          search_logits_specs=search_logits_specs)
+      teacher_logits = ensemble_logits.teacher_logits_spec
+    else:
+      ensemble_logits = EnsembleLogits(
+          train_logits_specs=search_logits_specs,
+          eval_logits_spec=search_logits_specs[0])
+    return (ensemble_logits.train_logits_specs,
+            ensemble_logits.eval_logits_spec, teacher_logits)
 
   def create_model_spec(self,
                         features,
                         params,
                         learning_rate_spec,
                         use_tpu,
-                        train_logits_specs,
-                        eval_logits_spec,
+                        trial_mode,
+                        towers,
                         labels,
                         mode,
-                        lengths,
-                        loss_fn,
+                        my_id,
                         model_directory,
                         predictions_fn,
                         optimizer_fn=None):
@@ -278,7 +518,7 @@ class TaskManager(object):
     is_training = mode == tf.estimator.ModeKeys.TRAIN
 
     if not optimizer_fn and is_training:
-      optimizer_fn = _get_optimizer_fn(
+      final_optimizer_fn = _get_optimizer_fn(
           optimizer=params.optimizer,
           learning_rate=learning_rate_spec["learning_rate"],
           use_tpu=use_tpu,
@@ -287,12 +527,16 @@ class TaskManager(object):
           exponential_decay_rate=learning_rate_spec.get(
               "exponential_decay_rate", -1),
           lr_warmup_steps=self._phoenix_spec.learning_spec.lr_warmup_steps)
+    elif is_training:
+      final_optimizer_fn = optimizer_fn
+      if "params" in inspect.signature(optimizer_fn).parameters:
+        final_optimizer_fn = functools.partial(optimizer_fn, params=params)
 
     train_op_fn = eval_op_fn
     if is_training:
       train_op_fn = functools.partial(
           _train_op_fn,
-          optimizer_fn=optimizer_fn,
+          optimizer_fn=final_optimizer_fn,
           use_synchronous_optimizer=self._phoenix_spec
           .use_synchronous_optimizer,
           l2_regularization=learning_rate_spec.get("l2_regularization", -1),
@@ -307,6 +551,17 @@ class TaskManager(object):
             mode != tf.estimator.ModeKeys.PREDICT):
           weights = features[self._phoenix_spec.weight_feature_name]
 
+        train_logits_specs, eval_logits_spec, teacher_logits = (
+            self.get_train_and_eval_logits(
+                towers=towers, trial_mode=trial_mode))
+
+        final_loss_fn = self._get_loss_fn(
+            original_loss_fn=supply_params_if_needed(self._loss_fn, params),
+            features=features,
+            mode=mode,
+            my_id=my_id,
+            teacher_logits_spec=teacher_logits)
+
         task_spec = self._create_task_spec(
             labels=labels,
             weights=weights,
@@ -315,7 +570,7 @@ class TaskManager(object):
             train_op_fn=train_op_fn,
             name="Trainer",
             mode=mode,
-            loss_fn=loss_fn)
+            loss_fn=final_loss_fn)
 
         train_op = None
         if is_training:
@@ -332,7 +587,8 @@ class TaskManager(object):
             loss=task_spec.loss,
             train_op=train_op,
             predictions=predictions,
-            train_hooks=task_spec.train_hooks_list)
+            train_hooks=task_spec.train_hooks_list,
+            eval_logits=eval_logits_spec.logits)
 
     # MultiTask. New Phoenix Behavior
     # Details in:
@@ -343,56 +599,52 @@ class TaskManager(object):
         num_weights_in_labels += 1
 
     # In predict mode we don't have labels
-    if labels:
+    if labels and not self._phoenix_spec.pass_label_dict_as_is:
       assert (len(labels) == len(self._phoenix_spec.multi_task_spec) +
               num_weights_in_labels)
-    if len(train_logits_specs) > 1:
-      logging.warning("Using ensembling in a multi-task training. If there is "
-                      "no task that restrict the searchable logits from "
-                      "rotating, then training is going to produce bad "
-                      "non-aligned ensembles.")
 
     primary_task = None
     task_spec_list = []
     for task_spec in self._phoenix_spec.multi_task_spec:
-      logits_spec = train_logits_specs[0]
       # Build tower on top of searched model for the specific task
-      if task_spec.architecture:
-        tower_architecture = [
-            blocks.BlockType[block_type]
-            for block_type in task_spec.architecture
-        ]
-        task_tower_spec = architecture_utils.construct_tower(
-            phoenix_spec=self._phoenix_spec,
-            input_tensor=tf.nn.relu(logits_spec.logits),
-            tower_name="task_{}_tower".format(task_spec.label_name),
-            architecture=np.array(tower_architecture),
-            is_training=is_training,
-            lengths=lengths,
-            hparams=params,
-            model_directory=model_directory,
-            logits_dimension=task_spec.number_of_classes,
-            is_frozen=False,
-            # TODO(b/172564129): add dropouts.
-            dropout_rate=None)
-        # Ignore auxiliary heads for task towers, if any.
-        task_logits = task_tower_spec.logits_spec.logits
-      else:
-        with tf.compat.v1.variable_scope("Phoenix/task_{}_tower".format(
-            task_spec.label_name)):
-          task_logits = self._add_projection_if_needed(
-              logits_spec.logits, task_spec.number_of_classes)
+      task_towers = collections.defaultdict(list)
+      for generator_name, tower_list in towers.items():
+        for i, tower_ in enumerate(tower_list):
+          new_tower_name = "{}_{}_{}".format(task_spec.label_name, str(i),
+                                             generator_name)
+          previous_tower_name = "{}_0_search_generator".format(
+              task_spec.label_name)
+          previous_model_dir = tower_.previous_model_dir
+          is_prior = (generator_name != base_tower_generator.SEARCH_GENERATOR)
+          task_tower = Task.get_task(
+              phoenix_spec=self._phoenix_spec,
+              tower_name=new_tower_name,
+              architecture=np.array([
+                  block_builder.BlockType[block_type]
+                  for block_type in task_spec.architecture
+              ]),
+              is_training=is_training,
+              logits_dimesnion=task_spec.number_of_classes,
+              is_frozen=is_prior,
+              hparams=params,
+              model_directory=model_directory,
+              generator_name=generator_name,
+              previous_tower_name=previous_tower_name,
+              previous_model_dir=previous_model_dir)
+          base_tensor = tower_.logits_spec.logits
+          if task_spec.apply_activation_on_shared_logits:
+            base_tensor = tf.nn.relu(base_tensor)
+          task_tower(base_tensor, training=is_training)
+          task_towers[generator_name].append(task_tower)
+      train_logits_spec, eval_logits_spec, teacher_logits = (
+          self.get_train_and_eval_logits(task_towers, trial_mode=trial_mode))
 
-      # Replace the base tower logits with those of the task tower.
-      logits_spec = logits_spec._replace(logits=task_logits)
-      if logits_spec.aux_logits:
-        aux_logits = self._add_projection_if_needed(logits_spec.aux_logits,
-                                                    task_spec.number_of_classes)
-        logits_spec = logits_spec._replace(aux_logits=aux_logits)
       with tf.compat.v1.variable_scope("Phoenix/trainer_{}".format(
           task_spec.label_name)):
         if mode != tf.estimator.ModeKeys.PREDICT:
           task_labels = labels[task_spec.label_name]
+          if self._phoenix_spec.pass_label_dict_as_is:
+            task_labels = labels
         else:
           task_labels = None
 
@@ -404,15 +656,24 @@ class TaskManager(object):
           else:
             weights = labels[task_spec.weight_feature_name]
 
+        task_loss_fn = self._get_loss_fn(
+            supply_params_if_needed(
+                extract_task_specific(self._loss_fn, task_spec.label_name),
+                params),
+            features=features,
+            mode=mode,
+            my_id=my_id,
+            teacher_logits_spec=teacher_logits)
         task = self._create_task_spec(
             labels=task_labels,
             weights=weights,
-            train_logits_specs=[logits_spec],
-            eval_logits_spec=logits_spec,
+            train_logits_specs=train_logits_spec,
+            eval_logits_spec=eval_logits_spec,
             train_op_fn=train_op_fn,
             name=task_spec.label_name,
             mode=mode,
-            loss_fn=loss_fn)
+            loss_fn=task_loss_fn,
+            add_train_ops=(not self._phoenix_spec.merge_losses_of_multitask))
         task_spec_list.append(task)
         if task_spec.label_name == self._phoenix_spec.primary_task_name:
           primary_task = task
@@ -422,7 +683,7 @@ class TaskManager(object):
 
     model_spec_predictions = {}
     for task in task_spec_list:
-      task_predictions = predictions_fn(
+      task_predictions = extract_task_specific(predictions_fn, task.name)(
           task.logits, mode=mode, temperature=self._phoenix_spec.temperature)
       for prediction_key, prediction_value in task_predictions.items():
         prediction_key_name = prediction_key + "/" + task.name
@@ -433,17 +694,33 @@ class TaskManager(object):
 
     train_op_list = []
     train_hooks_list = []
+    train_losses = []
     for task in task_spec_list:
       train_op_list.extend(task.train_op_list)
       train_hooks_list.extend(task.train_hooks_list)
+      train_losses.extend(task.train_losses)
 
     train_op = None
     if is_training:
-      train_op = _merge_train_op_list(train_op_list,
-                                      self._ensemble_spec.no_train_speedup)
+      if self._phoenix_spec.merge_losses_of_multitask:
+        # In this case, tasks in task_spec_list should not have train_ops nor
+        # hooks as in this case we sum up all losses to one and create
+        # training ops. Follow the usage of
+        # self._phoenix_spec.merge_losses_of_multitask above for when we call
+        # self._create_task_spec for more details.
+        if train_losses:
+          merged_loss = tf.add_n(train_losses, name="merged_loss")
+          train_op, train_hooks_list = train_op_fn(merged_loss)
+        else:
+          train_op = _merge_train_op_list([],
+                                          self._ensemble_spec.no_train_speedup)
+      else:
+        train_op = _merge_train_op_list(train_op_list,
+                                        self._ensemble_spec.no_train_speedup)
 
     return ModelSpec(
         loss=primary_task.loss,
         train_op=train_op,
         predictions=model_spec_predictions,
-        train_hooks=train_hooks_list)
+        train_hooks=train_hooks_list,
+        eval_logits=primary_task.logits)

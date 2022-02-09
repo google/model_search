@@ -50,6 +50,15 @@ class CommonTest(parameterized.TestCase, tf.test.TestCase):
         num_completed_trials, depth_thresholds, max_depth=5)
     self.assertEqual(expected, actual)
 
+  def test_get_random_architecture(self):
+    architecture = common.get_random_architecture(["a", "b", "c"], 3)
+    self.assertLen(architecture, 3)
+    self.assertAllInSet(architecture, ["a", "b", "c"])
+
+  def test_get_random_block(self):
+    block = common.get_random_block(["a", "b", "c"])
+    self.assertIn(block, ["a", "b", "c"])
+
 
 if __name__ == "__main__":
   tf.enable_v2_behavior()

@@ -1,12 +1,10 @@
 load("@rules_python//python:defs.bzl", "py_library", "py_test")
 
 package(default_visibility = [
-    "//model_search:__subpackages__",
+    "//visibility:public",
 ])
 
 licenses(["notice"])
-
-exports_files(["LICENSE"])
 
 py_library(
     name = "svdf_cell",

@@ -11,13 +11,13 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""A simple wrapper for kerastuner hyperparameters."""
+"""A simple wrapper for keras_tuner hyperparameters."""
 
 from absl import logging
-import kerastuner
+import keras_tuner
 
 
-class Hyperparameters(kerastuner.engine.hyperparameters.HyperParameters):
+class Hyperparameters(keras_tuner.HyperParameters):
   """Small simple wrapper to override the merge function of spaces."""
 
   def merge(self, hps, name_prefix="", overwrite=True):
@@ -29,7 +29,7 @@ class Hyperparameters(kerastuner.engine.hyperparameters.HyperParameters):
       overwrite: bool. Whether existing `HyperParameter`s should be overridden
         by those in `hps` with the same name and conditions.
     """
-    if isinstance(hps, kerastuner.engine.hyperparameters.HyperParameters):
+    if isinstance(hps, keras_tuner.HyperParameters):
       hps = hps.space
 
     if not overwrite:

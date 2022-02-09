@@ -50,11 +50,8 @@ class ReplayGeneratorTest(absltest.TestCase):
         metadata=ml_metadata_db.MLMetaData(
             _create_spec('adaptive'), study_owner='test', study_name='test'))
     call_args = generator.first_time_chief_generate(
-        features='features',
         input_layer_fn='input_layer',
         trial_mode='mode',
-        shared_input_tensor='input',
-        shared_lengths='input2',
         logits_dimension=5,
         hparams=None,
         run_config=tf.estimator.RunConfig(model_dir='mydir/5'),
@@ -62,11 +59,7 @@ class ReplayGeneratorTest(absltest.TestCase):
         trials=[])
     self.assertEqual(
         call_args, {
-            'features': 'features',
-            'input_layer_fn': 'input_layer',
             'phoenix_spec': _create_spec('adaptive'),
-            'shared_input_tensor': 'input',
-            'shared_lengths': 'input2',
             'is_training': True,
             'logits_dimension': 5,
             'prev_model_dir': 'mydir/4',
@@ -85,11 +78,8 @@ class ReplayGeneratorTest(absltest.TestCase):
         metadata=ml_metadata_db.MLMetaData(
             _create_spec('nonadaptive'), study_owner='test', study_name='test'))
     call_args = generator.first_time_chief_generate(
-        features='features',
         input_layer_fn='input_layer',
         trial_mode='mode',
-        shared_input_tensor='input',
-        shared_lengths='input2',
         logits_dimension=5,
         hparams=None,
         run_config=tf.estimator.RunConfig(model_dir='mydir/5'),
@@ -97,11 +87,7 @@ class ReplayGeneratorTest(absltest.TestCase):
         trials=[])
     self.assertEqual(
         call_args, {
-            'features': 'features',
-            'input_layer_fn': 'input_layer',
             'phoenix_spec': _create_spec('nonadaptive'),
-            'shared_input_tensor': 'input',
-            'shared_lengths': 'input2',
             'is_training': True,
             'logits_dimension': 5,
             'previous_model_dirs': ['mydir/1', 'mydir/2', 'mydir/3', 'mydir/4'],

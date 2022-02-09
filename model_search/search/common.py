@@ -17,7 +17,7 @@
 
 import os
 
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search.architecture import architecture_utils
 import numpy as np
 import tensorflow.compat.v2 as tf
@@ -71,7 +71,7 @@ def encode_architecture(architecture, problem_type):
     The np.array of the encoded architecture.
   """
 
-  architecture = [blocks.BlockType[b] for b in architecture]
+  architecture = [block_builder.BlockType[b] for b in architecture]
   return np.array(
       architecture_utils.fix_architecture_order(architecture, problem_type))
 
@@ -102,7 +102,8 @@ def get_allowed_depth(num_completed_trials, depth_thresholds=None,
 def block_indices(phoenix_spec):
   """Returns a list of allowable BlockType enum values from a phoenix_spec."""
   return [
-      blocks.BlockType[block_type] for block_type in phoenix_spec.blocks_to_use
+      block_builder.BlockType[block_type]
+      for block_type in phoenix_spec.blocks_to_use
   ]
 
 
@@ -131,8 +132,20 @@ def mutate_replace(architecture, new_block):
   output_architecture = architecture.copy()
   while True:
     block_to_replace = np.random.randint(0, architecture.size)
-    blocktype = blocks.BlockType(output_architecture[block_to_replace])
-    if blocktype not in blocks.FLATTEN_TYPES:
+    blocktype = block_builder.BlockType(output_architecture[block_to_replace])
+    if blocktype not in block_builder.FLATTEN_TYPES:
       break
   output_architecture[block_to_replace] = new_block
+  return output_architecture
+
+
+def get_random_block(blocks_names):
+  idx = np.random.randint(0, len(blocks_names))
+  return blocks_names[idx]
+
+
+def get_random_architecture(blocks_names, depth):
+  output_architecture = []
+  for _ in range(depth):
+    output_architecture.append(get_random_block(blocks_names))
   return output_architecture

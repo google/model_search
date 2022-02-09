@@ -41,11 +41,11 @@ class ReplayGenerator(base_tower_generator.BaseTowerGenerator):
   def generator_name(self):
     return "replay_generator"
 
-  def first_time_chief_generate(self, features, input_layer_fn, trial_mode,
-                                shared_input_tensor, shared_lengths,
+  def first_time_chief_generate(self, input_layer_fn, trial_mode,
                                 logits_dimension, hparams, run_config,
                                 is_training, trials):
     """Creates the prior for the ensemble."""
+    del input_layer_fn
     my_id = architecture_utils.DirectoryHandler.get_trial_id(
         run_config.model_dir, self._phoenix_spec)
 
@@ -54,11 +54,7 @@ class ReplayGenerator(base_tower_generator.BaseTowerGenerator):
       previous_model_dir = os.path.join(
           os.path.dirname(run_config.model_dir), str(int(my_id) - 1))
       return trial_utils.import_towers_one_trial(
-          features=features,
-          input_layer_fn=input_layer_fn,
           phoenix_spec=self._phoenix_spec,
-          shared_input_tensor=shared_input_tensor,
-          shared_lengths=shared_lengths,
           is_training=is_training,
           logits_dimension=logits_dimension,
           prev_model_dir=previous_model_dir,
@@ -74,11 +70,7 @@ class ReplayGenerator(base_tower_generator.BaseTowerGenerator):
           for i in range(my_id - 1)
       ]
       return trial_utils.import_towers_multiple_trials(
-          features=features,
-          input_layer_fn=input_layer_fn,
           phoenix_spec=self._phoenix_spec,
-          shared_input_tensor=shared_input_tensor,
-          shared_lengths=shared_lengths,
           is_training=is_training,
           logits_dimension=logits_dimension,
           previous_model_dirs=previous_model_dirs,

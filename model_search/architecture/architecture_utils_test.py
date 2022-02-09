@@ -17,7 +17,7 @@
 
 from absl.testing import parameterized
 
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search import hparam as hp
 from model_search.architecture import architecture_utils
 from model_search.metadata import trial
@@ -30,7 +30,8 @@ import tensorflow.compat.v2 as tf
 def _create_spec(problem_type,
                  complexity_thresholds=None,
                  max_depth=None,
-                 min_depth=None):
+                 min_depth=None,
+                 disable_last=False):
   output = phoenix_spec_pb2.PhoenixSpec()
   if complexity_thresholds is not None:
     output.increase_complexity_minimum_trials[:] = complexity_thresholds
@@ -39,6 +40,7 @@ def _create_spec(problem_type,
   if min_depth is not None:
     output.minimum_depth = min_depth
   output.problem_type = problem_type
+  output.disable_last_dense_layer = disable_last
   return output
 
 
@@ -123,57 +125,64 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
 
   @parameterized.named_parameters(
       {
-          "testcase_name": "empty",
+          "testcase_name":
+              "empty",
           "initial_architecture": [],
-          "fixed_architecture": [blocks.BlockType.PLATE_REDUCTION_FLATTEN]
+          "fixed_architecture":
+              [block_builder.BlockType.PLATE_REDUCTION_FLATTEN]
       }, {
-          "testcase_name": "flatten",
-          "initial_architecture": [blocks.BlockType.PLATE_REDUCTION_FLATTEN],
-          "fixed_architecture": [blocks.BlockType.PLATE_REDUCTION_FLATTEN]
+          "testcase_name":
+              "flatten",
+          "initial_architecture":
+              [block_builder.BlockType.PLATE_REDUCTION_FLATTEN],
+          "fixed_architecture":
+              [block_builder.BlockType.PLATE_REDUCTION_FLATTEN]
       }, {
           "testcase_name": "downsample_flatten",
-          "initial_architecture": [blocks.BlockType.DOWNSAMPLE_FLATTEN],
-          "fixed_architecture": [blocks.BlockType.DOWNSAMPLE_FLATTEN]
+          "initial_architecture": [block_builder.BlockType.DOWNSAMPLE_FLATTEN],
+          "fixed_architecture": [block_builder.BlockType.DOWNSAMPLE_FLATTEN]
       }, {
           "testcase_name":
               "basic_case",
           "initial_architecture": [
-              blocks.BlockType.PLATE_REDUCTION_FLATTEN,
-              blocks.BlockType.FULLY_CONNECTED, blocks.BlockType.CONVOLUTION_3X3
+              block_builder.BlockType.PLATE_REDUCTION_FLATTEN,
+              block_builder.BlockType.FULLY_CONNECTED,
+              block_builder.BlockType.CONVOLUTION_3X3
           ],
           "fixed_architecture": [
-              blocks.BlockType.CONVOLUTION_3X3,
-              blocks.BlockType.PLATE_REDUCTION_FLATTEN,
-              blocks.BlockType.FULLY_CONNECTED
+              block_builder.BlockType.CONVOLUTION_3X3,
+              block_builder.BlockType.PLATE_REDUCTION_FLATTEN,
+              block_builder.BlockType.FULLY_CONNECTED
           ]
       }, {
           "testcase_name":
               "basic_downsample_case",
           "initial_architecture": [
-              blocks.BlockType.DOWNSAMPLE_FLATTEN,
-              blocks.BlockType.FULLY_CONNECTED, blocks.BlockType.CONVOLUTION_3X3
+              block_builder.BlockType.DOWNSAMPLE_FLATTEN,
+              block_builder.BlockType.FULLY_CONNECTED,
+              block_builder.BlockType.CONVOLUTION_3X3
           ],
           "fixed_architecture": [
-              blocks.BlockType.CONVOLUTION_3X3,
-              blocks.BlockType.DOWNSAMPLE_FLATTEN,
-              blocks.BlockType.FULLY_CONNECTED
+              block_builder.BlockType.CONVOLUTION_3X3,
+              block_builder.BlockType.DOWNSAMPLE_FLATTEN,
+              block_builder.BlockType.FULLY_CONNECTED
           ]
       }, {
           "testcase_name":
               "advanced_case",
           "initial_architecture": [
-              blocks.BlockType.PLATE_REDUCTION_FLATTEN,
-              blocks.BlockType.FULLY_CONNECTED,
-              blocks.BlockType.FULLY_CONNECTED_PYRAMID,
-              blocks.BlockType.CONVOLUTION_3X3,
-              blocks.BlockType.DOWNSAMPLE_CONVOLUTION_3X3
+              block_builder.BlockType.PLATE_REDUCTION_FLATTEN,
+              block_builder.BlockType.FULLY_CONNECTED,
+              block_builder.BlockType.FULLY_CONNECTED_PYRAMID,
+              block_builder.BlockType.CONVOLUTION_3X3,
+              block_builder.BlockType.DOWNSAMPLE_CONVOLUTION_3X3
           ],
           "fixed_architecture": [
-              blocks.BlockType.CONVOLUTION_3X3,
-              blocks.BlockType.DOWNSAMPLE_CONVOLUTION_3X3,
-              blocks.BlockType.PLATE_REDUCTION_FLATTEN,
-              blocks.BlockType.FULLY_CONNECTED,
-              blocks.BlockType.FULLY_CONNECTED_PYRAMID
+              block_builder.BlockType.CONVOLUTION_3X3,
+              block_builder.BlockType.DOWNSAMPLE_CONVOLUTION_3X3,
+              block_builder.BlockType.PLATE_REDUCTION_FLATTEN,
+              block_builder.BlockType.FULLY_CONNECTED,
+              block_builder.BlockType.FULLY_CONNECTED_PYRAMID
           ]
       })
   def test_fix_architecture_order(self, initial_architecture,
@@ -186,20 +195,20 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
       {
           "testcase_name": "empty_rnn",
           "problem_type": phoenix_spec_pb2.PhoenixSpec.RNN_ALL_ACTIVATIONS,
-          "new_block": blocks.BlockType.LSTM_128,
+          "new_block": block_builder.BlockType.LSTM_128,
           "initial_architecture": np.array([]),
-          "expected_architecture": [blocks.BlockType.LSTM_128]
+          "expected_architecture": [block_builder.BlockType.LSTM_128]
       }, {
           "testcase_name":
               "empty_dnn",
           "problem_type":
               phoenix_spec_pb2.PhoenixSpec.DNN,
           "new_block":
-              blocks.BlockType.FIXED_OUTPUT_FULLY_CONNECTED_128,
+              block_builder.BlockType.FIXED_OUTPUT_FULLY_CONNECTED_128,
           "initial_architecture":
               np.array([]),
           "expected_architecture":
-              [blocks.BlockType.FIXED_OUTPUT_FULLY_CONNECTED_128]
+              [block_builder.BlockType.FIXED_OUTPUT_FULLY_CONNECTED_128]
       })
   def test_increase_structure_depth(self, problem_type, initial_architecture,
                                     new_block, expected_architecture):
@@ -258,8 +267,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
           "dropout":
               -1,
           "expected_logits": [[
-              -0.1481, 0.3328, 0.3028, 0.5652, 0.6860, 0.06171, 0.09998,
-              -0.2622, 0.2186, -0.1322
+              -0.011483, 0.038699, -0.047852, 0.063045, 0.08866, -0.00095,
+              -0.017504, -0.06242, 0.06376, -0.092758
           ]]
       }, {
           "testcase_name":
@@ -267,8 +276,8 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
           "dropout":
               0.1,
           "expected_logits": [[
-              0.7001, -0.06655, -0.1711, 0.1274, -0.8175, 0.2932, 0.06242,
-              0.2182, -0.06626, 0.7882
+              0.146662, -0.014685, -0.09553, -0.00853, -0.081524, 0.103516,
+              0.030273, 0.036939, 0.013888, 0.073446
           ]],
       })
   def test_construct_network(self, dropout, expected_logits):
@@ -499,6 +508,79 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
           "output_shape": [20, 7],
           "extra_block": 16,  # Flatten.
           "use_auxiliary_head": True
+      },
+      {
+          "testcase_name":
+              "cnn_last_layer_disabled",
+          "input_tensor_shape": [20, 20],
+          "spec":
+              _create_spec(phoenix_spec_pb2.PhoenixSpec.CNN, disable_last=True),
+          "output_shape": [20, 20],
+      },
+      {
+          "testcase_name":
+              "dnn_last_layer_disabled",
+          "input_tensor_shape": [20, 20],
+          "spec":
+              _create_spec(phoenix_spec_pb2.PhoenixSpec.DNN, disable_last=True),
+          "output_shape": [20, 20],
+      },
+      {
+          "testcase_name":
+              "rnn_all_activations_last_layer_disabled",
+          "input_tensor_shape": [20, 20, 20],
+          "spec":
+              _create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.RNN_ALL_ACTIVATIONS,
+                  disable_last=True),
+          "output_shape": [20, 20, 20],
+      },
+      {
+          "testcase_name":
+              "rnn_last_activations_last_layer_disabled",
+          "input_tensor_shape": [20, 20, 20],
+          "spec":
+              _create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.RNN_LAST_ACTIVATIONS,
+                  disable_last=True),
+          "output_shape": [20, 20, 20],
+          "lengths":
+              list(range(20))
+      },
+      {
+          "testcase_name":
+              "rnn_last_activations_no_length_last_layer_disabled",
+          "input_tensor_shape": [20, 20, 20],
+          "spec":
+              _create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.RNN_LAST_ACTIVATIONS,
+                  disable_last=True),
+          "output_shape": [20, 20, 20],
+      },
+      {
+          "testcase_name":
+              "nasnet_aux_head_last_layer_disabled",
+          "input_tensor_shape": [20, 20],
+          "spec":
+              _create_spec(phoenix_spec_pb2.PhoenixSpec.CNN, disable_last=True),
+          "output_shape": [20, 20],
+          "extra_block":
+              6,  # Downsample convolution.
+          "extra_block_shape": [20, 20, 20, 20],
+          "use_auxiliary_head":
+              True
+      },
+      {
+          "testcase_name":
+              "deep_skip_head_last_layer_disabled",
+          "input_tensor_shape": [20, 20],
+          "spec":
+              _create_spec(phoenix_spec_pb2.PhoenixSpec.CNN, disable_last=True),
+          "output_shape": [20, 20],
+          "extra_block":
+              16,  # Flatten.
+          "use_auxiliary_head":
+              True
       })
   def test_create_tower_spec(
       self,
@@ -542,72 +624,58 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
           "new_architecture":
               np.array([1, 3, 34]),
           "expected_output": [
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/biases",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/weights",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/biases",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/weights",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel",
               "Phoenix/test_tower/last_dense_1334/dense/bias",
               "Phoenix/test_tower/last_dense_1334/dense/kernel",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_mean",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_mean",
+              # Removing until batch norm is back on.
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/beta",
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/gamma",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_variance",
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_variance",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_mean",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/beta",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/gamma",
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_mean",
           ]
-      }, {
+      },
+      {
           "testcase_name": "same_graph_snapshotting_new_towername",
           "new_architecture": np.array([1, 3, 34]),
           "expected_output": [
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/biases",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/weights",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/biases",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/weights",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel",
               "Phoenix/test_tower/last_dense_1334/dense/bias",
               "Phoenix/test_tower/last_dense_1334/dense/kernel",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_mean",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_mean",
+              # Removing until batch norm is back on.
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/beta",
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/gamma",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_variance",
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_variance",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_mean",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/beta",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/gamma",
+              # "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_mean",
           ],
           "new_tower_name": "test_tower_2"
-      }, {
+      },
+      {
           "testcase_name":
               "changing_second",
           "new_architecture":
               np.array([1, 2, 34]),
           "expected_output": [
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/weights",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/biases",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_mean",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "beta"
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias",
+              # Removing until batch norm is back on.
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_mean",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_variance",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/beta",
+              # "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/gamma"
           ]
       })
   def test_init_variables(self,
@@ -622,18 +690,19 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
           problem_type=phoenix_spec_pb2.PhoenixSpec.CNN)
       with self.test_session(graph=tf.Graph()) as sess:
         input_tensor = tf.zeros([100, 32, 32, 3])
-        _ = architecture_utils.construct_tower(
-            phoenix_spec=phoenix_spec,
-            input_tensor=input_tensor,
-            tower_name="test_tower",
-            architecture=architecture,
-            is_training=True,
-            lengths=None,
-            logits_dimension=10,
-            model_directory=self.get_temp_dir(),
-            hparams=hp.HParams(),
-            is_frozen=False,
-            dropout_rate=None)
+        with tf.name_scope("Phoenix/test_tower"):
+          _ = architecture_utils.construct_tower(
+              phoenix_spec=phoenix_spec,
+              input_tensor=input_tensor,
+              tower_name="test_tower",
+              architecture=architecture,
+              is_training=True,
+              lengths=None,
+              logits_dimension=10,
+              model_directory=self.get_temp_dir(),
+              hparams=hp.HParams(),
+              is_frozen=False,
+              dropout_rate=None)
         saver = tf.compat.v1.train.Saver()
         sess.run(tf.compat.v1.global_variables_initializer())
         sess.run(tf.compat.v1.local_variables_initializer())
@@ -641,18 +710,19 @@ class ArchitectureUtilsTest(parameterized.TestCase, tf.test.TestCase):
 
       with self.test_session(graph=tf.Graph()) as sess:
         input_tensor = tf.zeros([100, 32, 32, 3])
-        _ = architecture_utils.construct_tower(
-            phoenix_spec=phoenix_spec,
-            input_tensor=input_tensor,
-            tower_name=new_tower_name,
-            architecture=new_architecture,
-            is_training=True,
-            lengths=None,
-            logits_dimension=10,
-            hparams=hp.HParams(),
-            model_directory=self.get_temp_dir(),
-            is_frozen=False,
-            dropout_rate=None)
+        with tf.name_scope("Phoenix/" + new_tower_name):
+          _ = architecture_utils.construct_tower(
+              phoenix_spec=phoenix_spec,
+              input_tensor=input_tensor,
+              tower_name=new_tower_name,
+              architecture=new_architecture,
+              is_training=True,
+              lengths=None,
+              logits_dimension=10,
+              hparams=hp.HParams(),
+              model_directory=self.get_temp_dir(),
+              is_frozen=False,
+              dropout_rate=None)
         snapshotting_variables = architecture_utils.init_variables(
             tf.train.latest_checkpoint(directory), "Phoenix/test_tower",
             "Phoenix/{}".format(new_tower_name))

@@ -21,9 +21,11 @@ This class is reponsible for generating architectures or towers.
 import abc
 import os
 import time
+from typing import List
 
 from absl import logging
 from model_search.architecture import architecture_utils
+from model_search.architecture import tower
 import tensorflow.compat.v2 as tf
 
 
@@ -72,15 +74,8 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
       for item in map(str, architecture.tolist()):
         f.write("{}\n".format(item))
 
-  def _build_from_existing_checkpoint(self,
-                                      model_dir,
-                                      features,
-                                      input_layer_fn,
-                                      trial_mode,
-                                      shared_input_tensor,
-                                      logits_dimension,
-                                      is_training,
-                                      shared_lengths=None):
+  def _build_from_existing_checkpoint(self, model_dir, trial_mode,
+                                      logits_dimension, is_training):
     """Builds the neural network from an existing checkpoint.
 
     This function builds or replicates the model network given a model_dir with
@@ -89,18 +84,10 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
     Args:
       model_dir: a string holding the directory of the model. Must have a
         checkpoint in it.
-      features: feature dict in case the tower needs to create the input tensor
-      input_layer_fn: A function that converts feature Tensors to input layer.
-        See learning.autolx.model_search.data.Provider.get_input_layer_fn
-        for details.
       trial_mode: the TrialMode for the current Phoenix trial.
-      shared_input_tensor: a tf.Tensor to build the network on top of.
       logits_dimension: An int holding the dimension of the logits (number of
         classes for the multi class problem).
       is_training: a boolean indicating if we are in training.
-      shared_lengths: A tf.Tensor with the lengths (dimenions: [batch_size])
-        holding the length of each sequence for sequential problems. Keep as
-        None, for non sequential problems.
 
     Returns:
       A list of LogitsSpec, and a list of architectures (I.e., one LogitsSpec
@@ -110,36 +97,29 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
     del trial_mode  # Unused. Only used in subclasses.
 
     logging.info("Building from existing checkpoint.")
-    towers = architecture_utils.get_number_of_towers(model_dir,
-                                                     self.generator_name())
-    logits_specs = []
-    architectures = []
-    for i in range(towers):
+    num_towers = architecture_utils.get_number_of_towers(
+        model_dir, self.generator_name())
+    towers = []
+    for i in range(num_towers):
       tower_name = self.generator_name() + "_{}".format(str(i))
-      tower_spec = architecture_utils.import_tower(
+      tower_ = tower.Tower.load(
           phoenix_spec=self._phoenix_spec,
-          features=features,
-          input_layer_fn=input_layer_fn,
-          shared_input_tensor=shared_input_tensor,
           original_tower_name=tower_name,
           new_tower_name=tower_name,
           model_directory=model_dir,
           new_model_directory=model_dir,
           is_training=is_training,
           logits_dimension=logits_dimension,
-          shared_lengths=shared_lengths,
-          force_snapshot=False,
           force_freeze=False,
-          allow_auxiliary_head=self._allow_auxiliary_head)
-      logits_specs.append(tower_spec.logits_spec)
-      architectures.append(tower_spec.architecture)
+          allow_auxiliary_head=self._allow_auxiliary_head,
+          skip_initialization=True)
+      towers.append(tower_)
 
-    architecture_utils.set_number_of_towers(self.generator_name(), towers)
-    return logits_specs, architectures
+    architecture_utils.set_number_of_towers(self.generator_name(), num_towers)
+    return towers
 
   @abc.abstractmethod
-  def first_time_chief_generate(self, features, input_layer_fn, trial_mode,
-                                shared_input_tensor, shared_lengths,
+  def first_time_chief_generate(self, input_layer_fn, trial_mode,
                                 logits_dimension, hparams, run_config,
                                 is_training, trials):
     """Creates the tower(s).
@@ -161,15 +141,10 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
     The above is needed for _build_from_existing_checkpoint.
 
     Args:
-      features: feature dict in case the tower needs to create the input tensor
       input_layer_fn: A function that converts feature Tensors to input layer.
         See learning.autolx.model_search.data.Provider.get_input_layer_fn
         for details.
       trial_mode: the TrialMode for the current Phoenix trial.
-      shared_input_tensor: tf.Tensor of type tf.float. It is the input to the
-        network.
-      shared_lengths: tf.Tensor of ints. It is the lengths for rnn problem. Keep
-        as None if the problem is not recurrent.
       logits_dimension: The last axis dimension of the logits.
       hparams: hp.HParams with the hyperparameters.
       run_config: tf.RunConfig instance.
@@ -181,21 +156,15 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
       and one architecture per tower that the generator creates).
     """
 
-  def generate(self, features, input_layer_fn, trial_mode, shared_input_tensor,
-               shared_lengths, logits_dimension, hparams, run_config,
-               is_training, trials):
+  def generate(self, input_layer_fn, trial_mode, logits_dimension, hparams,
+               run_config, is_training, trials) -> List[tower.Tower]:
     """Generates the next architecture to try.
 
     Args:
-      features: feature dict in case the tower needs to create the input tensor
       input_layer_fn: A function that converts feature Tensors to input layer.
         See learning.autolx.model_search.data.Provider.get_input_layer_fn
         for details.
       trial_mode: the TrialMode for the current Phoenix trial.
-      shared_input_tensor: tf.Tensor of type tf.float. It is the input to the
-        network.
-      shared_lengths: tf.Tensor of ints. It is the lengths for rnn problem. Keep
-        as None if the problem is not recurrent.
       logits_dimension: An int holding the dimension of the logits (number of
         classes for the multi class problem).
       hparams: the hyperparameters as given from oracle.
@@ -214,20 +183,13 @@ class BaseTowerGenerator(object, metaclass=abc.ABCMeta):
     if tf.train.latest_checkpoint(run_config.model_dir):
       return self._build_from_existing_checkpoint(
           model_dir=run_config.model_dir,
-          features=features,
-          input_layer_fn=input_layer_fn,
           trial_mode=trial_mode,
-          shared_input_tensor=shared_input_tensor,
           logits_dimension=logits_dimension,
-          is_training=is_training,
-          shared_lengths=shared_lengths)
+          is_training=is_training)
 
     return self.first_time_chief_generate(
-        features=features,
         input_layer_fn=input_layer_fn,
         trial_mode=trial_mode,
-        shared_input_tensor=shared_input_tensor,
-        shared_lengths=shared_lengths,
         logits_dimension=logits_dimension,
         hparams=hparams,
         run_config=run_config,

@@ -88,6 +88,7 @@ def default_get_input_layer_fn(problem_type, feature_columns):
           return (tf.cast(features[feature_columns[0].name],
                           dtype=tf.float32), features[lengths_feature_name])
         elif (
+            len(feature_columns) == 1 and
             feature_columns[0].name in features and
             not isinstance(features[feature_columns[0].name], tf.SparseTensor)):
           return tf.cast(
@@ -106,5 +107,31 @@ def default_get_input_layer_fn(problem_type, feature_columns):
                   features)
       else:
         raise ValueError("Unknown problem type")
+
+  return _input_layer_fn
+
+
+def default_get_keras_input_layer_fn(problem_type, feature_columns):
+  """Default implementation of get_input_layer_fn."""
+
+  def _input_layer_fn(is_training, scope_name="Phoenix/Input"):
+
+    with tf.compat.v1.variable_scope(scope_name):
+      if problem_type != phoenix_spec_pb2.PhoenixSpec.DNN:
+        raise ValueError("Only DNN problem type is supported for keras at the "
+                         "moment.")
+
+      # To allow running a custom evaluation where multiple batches are
+      # aggregated in a single metric_fn call, we need to define the
+      # batch_size based on the input_fn, but DenseFeatures does not allow
+      # this.
+      if any([
+          not feature_column_lib.is_feature_column_v2([fc])
+          for fc in feature_columns
+      ]):
+        raise ValueError("TF1 feature columns are not supported for keras")
+
+      return tf.keras.layers.DenseFeatures(
+          feature_columns, name="input_layer", trainable=is_training), None
 
   return _input_layer_fn

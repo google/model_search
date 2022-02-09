@@ -2,8 +2,6 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
-
 proto_library(
     name = "phoenix_spec_proto",
     srcs = ["phoenix_spec.proto"],

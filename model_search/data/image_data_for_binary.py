@@ -109,3 +109,40 @@ class Provider(data.Provider):
             key='image', shape=(self._image_height, self._image_width, 3))
     ]
     return feature_columns
+
+  def get_keras_input(self, batch_size):
+    """Returns keras input as explained in data.py module."""
+    train_dataset = tf.keras.preprocessing.image_dataset_from_directory(
+        directory=self._input_dir,
+        labels='inferred',
+        label_mode='binary',
+        class_names=None,
+        color_mode='rgb',
+        batch_size=batch_size,
+        image_size=(self._image_height, self._image_width),
+        shuffle=True,
+        seed=73,
+        validation_split=self._eval_fraction,
+        subset='training',
+        interpolation='bilinear',
+        follow_links=False)
+
+    train_dataset = train_dataset.cache().prefetch(
+        buffer_size=tf.data.experimental.AUTOTUNE)
+
+    validation = tf.keras.preprocessing.image_dataset_from_directory(
+        directory=self._input_dir,
+        labels='inferred',
+        label_mode='binary',
+        class_names=None,
+        color_mode='rgb',
+        batch_size=batch_size,
+        image_size=(self._image_height, self._image_width),
+        shuffle=True,
+        seed=73,
+        validation_split=self._eval_fraction,
+        subset='validation',
+        interpolation='bilinear',
+        follow_links=False)
+
+    return train_dataset, None, validation

@@ -21,12 +21,12 @@ This module contains that class `Blocks`, which is a helper class to build any
 
 import enum
 
-from model_search import blocks
+from model_search import block
 from model_search import registry
 from model_search.hparams import hyperparameters as ms_hparameters
 
 
-enum_dict = registry.get_base_enum(blocks.Block)
+enum_dict = registry.get_base_enum(block.Block)
 enum_dict.update({'EMPTY_BLOCK': 0})
 
 BlockType = enum.IntEnum('BlockType', enum_dict)  # pylint: disable=invalid-name
@@ -39,20 +39,27 @@ FLATTEN_TYPES = (
 )
 
 
+_block_builders = dict()
+
+
 class Blocks(object):
   """Blocks class to help creating the blocks."""
 
   def __init__(self):
     """Initializes (constructs) the `Blocks` class."""
-    self._block_builders = {}
-    for block_type in BlockType:
-      if block_type == BlockType.EMPTY_BLOCK:
-        continue
-      self._block_builders.update(
-          {block_type: registry.lookup(block_type.name, blocks.Block)})
+    if not _block_builders:
+      for block_type in BlockType:
+        if block_type == BlockType.EMPTY_BLOCK:
+          continue
+        _block_builders.update(
+            {block_type: registry.lookup(block_type.name, block.Block)})
 
   def __getitem__(self, block_type):
-    return self._block_builders[block_type]
+    return _block_builders[block_type]
+
+  def get_new(self, block_type, override_name=None):
+    return registry.lookup(
+        block_type.name, block.Block, override_name=override_name)
 
   @staticmethod
   def search_space(blocks_to_use=None):
@@ -62,7 +69,7 @@ class Blocks(object):
       if block_type == BlockType.EMPTY_BLOCK:
         continue
       if blocks_to_use is None or block_type.name in blocks_to_use:
-        target = registry.lookup(block_type.name, blocks.Block)
+        target = registry.lookup(block_type.name, block.Block)
         hps = target.requires_hparams()
         if hps:
           search_space.merge(hps, name_prefix=(block_type.name + '_'))

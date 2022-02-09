@@ -5,8 +5,6 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
-
 py_library(
     name = "utils",
     srcs = ["utils.py"],
@@ -50,7 +48,22 @@ model_search_oss_test(
     name = "csv_data_for_binary_test",
     dataset_dep = ":csv_data_for_binary",
     extra_args = [
-        "--filename=$${TEST_SRCDIR}/model_search/data/testdata/csv_random_data.csv",
+        "--filename=$${TEST_SRCDIR}/model_search/model_search/data/testdata/csv_random_data.csv",
+        "--validation_filename=$${TEST_SRCDIR}/model_search/model_search/data/testdata/csv_random_data.csv",
+    ],
+    problem_type = "dnn",
+    test_data = [
+        "//model_search/data/testdata:csv_random_data",
+    ],
+)
+
+model_search_oss_test(
+    name = "csv_data_for_binary_test_estimator",
+    dataset_dep = ":csv_data_for_binary",
+    extra_args = [
+        "--filename=$${TEST_SRCDIR}/model_search/model_search/data/testdata/csv_random_data.csv",
+        "--validation_filename=$${TEST_SRCDIR}/model_search/model_search/data/testdata/csv_random_data.csv",
+        "--force_estimator=True",
     ],
     problem_type = "dnn",
     test_data = [
@@ -99,9 +112,24 @@ model_search_oss_test(
     name = "image_data_for_binary_test",
     dataset_dep = ":image_data_for_binary",
     extra_args = [
-        "--input_dir=$${TEST_SRCDIR}/model_search/data/testdata/images",
+        "--input_dir=$${TEST_SRCDIR}/model_search/model_search/data/testdata/images",
         "--image_height=100",
         "--image_width=100",
+    ],
+    problem_type = "cnn",
+    test_data = [
+        "//model_search/data/testdata:image_data",
+    ],
+)
+
+model_search_oss_test(
+    name = "image_data_for_binary_test_estimator",
+    dataset_dep = ":image_data_for_binary",
+    extra_args = [
+        "--input_dir=$${TEST_SRCDIR}/model_search/model_search/data/testdata/images",
+        "--image_height=100",
+        "--image_width=100",
+        "--force_estimator=True",
     ],
     problem_type = "cnn",
     test_data = [

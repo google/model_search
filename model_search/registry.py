@@ -36,7 +36,11 @@ _ENUM_ID = "enum_id"
 _registries = {}
 
 
-def register(base, init_args=None, lookup_name=None, enum_id=None):
+def register(base,
+             init_args=None,
+             lookup_name=None,
+             enum_id=None,
+             add_name_to_args=False):
   """Produces a decorator to register a subclass of a base class, or a method.
 
   This produces a decorator to register a subclass of a base class, or a method
@@ -71,6 +75,7 @@ def register(base, init_args=None, lookup_name=None, enum_id=None):
       subclass with different init_args under different names.
     enum_id: An integer. This helps creating an enum from lookup name to id for
       all subclasses / methods that belong to one base.
+    add_name_to_args: adds the name to init_args.
 
   Returns:
     A decorator.
@@ -138,10 +143,13 @@ def register(base, init_args=None, lookup_name=None, enum_id=None):
     # stack trace is [this_function, user_function,...]
     # so the user function is #1.
     stack = traceback.extract_stack()
+    final_args = init_args
+    if add_name_to_args:
+      final_args.update({"name": lookup_name})
     registry[name] = {
         _TYPE_TAG: cls_or_method,
         _LOCATION_TAG: stack[1],
-        _INIT_ARGS: init_args,
+        _INIT_ARGS: final_args,
         _ENUM_ID: enum_id
     }
 
@@ -150,7 +158,7 @@ def register(base, init_args=None, lookup_name=None, enum_id=None):
   return _register_decorator
 
 
-def lookup(name, base):
+def lookup(name, base, override_name=None):
   """Looks up a subclass of a base class from the registry.
 
   Looks up a subclass of a base class with name provided from the
@@ -159,6 +167,7 @@ def lookup(name, base):
   Args:
     name: Name to look up from the registry.
     base: The base class of the subclass to be found.
+    override_name: string to override the name of the instance.
 
   Returns:
     Subclass of the name if found, None otherwise.
@@ -170,9 +179,35 @@ def lookup(name, base):
   if name not in registry:
     return None
   init_args = registry[name][_INIT_ARGS]
+  if override_name:
+    init_args.update({"name": override_name})
   if init_args is not None:
     return registry[name][_TYPE_TAG](**init_args)
   return registry[name][_TYPE_TAG]
+
+
+def modify_init_args(name, base, new_init_args):
+  """Modifies init args for a subclass of a base class from the registry.
+
+  Args:
+    name: Name to look up from the registry.
+    base: The base class of the subclass to be found.
+    new_init_args: a kwargs dict with new args names and values.
+
+  Raises:
+    RuntimeError: in case name or base are not in registeries.
+  """
+  basename = base.__name__
+  if basename not in _registries:
+    raise RuntimeError(
+        "Asking to change args of a baseclass %s not in registry." %
+        (basename,))
+  registry = _registries[basename]
+  if name not in registry:
+    raise RuntimeError(
+        "Asking to change args of a subclass %s not in registry." % (name,))
+
+  registry[name][_INIT_ARGS] = new_init_args
 
 
 def lookup_all(base):

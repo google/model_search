@@ -18,7 +18,7 @@
 from absl.testing import parameterized
 
 import mock
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search import hparam as hp
 from model_search.metadata import trial as trial_module
 from model_search.proto import phoenix_spec_pb2
@@ -47,7 +47,7 @@ def _get_suggestion(architectures,
   with mock.patch("model_search.architecture"
                   ".architecture_utils.get_architecture") as mock_get_arch:
 
-    blocks_strs = [blocks.BlockType(b).name for b in blocks_to_use]
+    blocks_strs = [block_builder.BlockType(b).name for b in blocks_to_use]
     spec = search_test_utils.create_spec(
         phoenix_spec_pb2.PhoenixSpec.CNN,
         blocks_to_use=blocks_strs,
@@ -79,8 +79,9 @@ def _get_suggestion(architectures,
     # Second return val fork_trial is a nonsense concept for LinearModel.
     output_architecture, _ = algorithm.get_suggestion(trials, hparams)
     if not pass_flatten:
-      output_architecture = np.array(
-          [b for b in output_architecture if b not in blocks.FLATTEN_TYPES])
+      output_architecture = np.array([
+          b for b in output_architecture if b not in block_builder.FLATTEN_TYPES
+      ])
     return output_architecture
 
 
@@ -159,7 +160,7 @@ class LinearModelTest(parameterized.TestCase, tf.test.TestCase):
     # TODO(b/172564129): This test is not correct.
     block_ints = [
         b.value
-        for b in blocks.BlockType
+        for b in block_builder.BlockType
         if b.value not in [126, 127, 128, 129]
     ]
     blocks_to_use = np.random.choice(block_ints, 3)
@@ -198,8 +199,8 @@ class LinearModelTest(parameterized.TestCase, tf.test.TestCase):
     self.assertAllEqual(best_nogrow, expected_best)
 
     best_grow = _get_suggestion(architectures, blocks_to_use, losses, grow=True)
-    self.assertAllEqual(best_grow,
-                        np.append(expected_best, blocks.BlockType[NEW_BLOCK]))
+    self.assertAllEqual(
+        best_grow, np.append(expected_best, block_builder.BlockType[NEW_BLOCK]))
 
   def test_flatten_modelfitting(self):
     """Ensure that we correctly deal with the flatten block in fitting.
@@ -215,9 +216,9 @@ class LinearModelTest(parameterized.TestCase, tf.test.TestCase):
     depth = 3
     ntrials = 10 * len(blocks_to_use) * depth
     flatten_blocks = (
-        blocks.BlockType.FLATTEN,
-        blocks.BlockType.DOWNSAMPLE_FLATTEN,
-        blocks.BlockType.PLATE_REDUCTION_FLATTEN,
+        block_builder.BlockType.FLATTEN,
+        block_builder.BlockType.DOWNSAMPLE_FLATTEN,
+        block_builder.BlockType.PLATE_REDUCTION_FLATTEN,
     )
     assert not set(b.value for b in flatten_blocks) & set(blocks_to_use)
 
@@ -259,17 +260,17 @@ class LinearModelTest(parameterized.TestCase, tf.test.TestCase):
 
     # Make trials s.t. the linear model will output all convolutions.
     architectures = [
-        np.repeat(blocks.BlockType.EMPTY_BLOCK, 4),
-        np.repeat(blocks.BlockType.CONVOLUTION_3X3, 4)
+        np.repeat(block_builder.BlockType.EMPTY_BLOCK, 4),
+        np.repeat(block_builder.BlockType.CONVOLUTION_3X3, 4)
     ]
     losses = [0.1, 0.01]
-    blocks_to_use = [blocks.BlockType.CONVOLUTION_3X3]
+    blocks_to_use = [block_builder.BlockType.CONVOLUTION_3X3]
 
     # Make sure the model suggestion includes a flatten block,
     # despite raw model output being all convolutional.
     best = _get_suggestion(
         architectures, blocks_to_use, losses, grow=grow, pass_flatten=True)
-    flattens = [b for b in best if "FLATTEN" in blocks.BlockType(b).name]
+    flattens = [b for b in best if "FLATTEN" in block_builder.BlockType(b).name]
     nflat = len(flattens)
     self.assertGreater(nflat, 0)
 

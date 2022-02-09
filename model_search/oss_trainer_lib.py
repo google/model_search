@@ -23,7 +23,7 @@ import random
 
 from absl import flags
 from absl import logging
-import kerastuner
+import keras_tuner
 
 from model_search import hparam as hp
 from model_search import phoenix
@@ -40,7 +40,15 @@ flags.DEFINE_string(
     "phoenix_dataset", "", "Which dataset to train on. "
     "If only provider is registered then you do not have to set this flag. "
     "Needs to be set in all other cases with the dataset name.")
-flags.DEFINE_integer("phoenix_train_steps", 1000, "Number of training steps.")
+flags.DEFINE_integer(
+    "phoenix_train_steps", 1000,
+    "Number of training steps. Note that this flag is ignored "
+    "in Keras mode, and train_ephocs below is used instead.")
+flags.DEFINE_integer(
+    "train_epochs", 10, "Number of epochs to train for in "
+    "Keras mode. If you are training with estimator this flag is "
+    "ignored. This flag is needed as keras fit function "
+    "requires the number of epochs.")
 flags.DEFINE_integer("phoenix_save_summary_steps", 2000,
                      "Save summaries every this many steps.")
 flags.DEFINE_integer(
@@ -110,6 +118,11 @@ flags.DEFINE_string("experiment_name", None,
 flags.DEFINE_string("experiment_owner", None, "A string holding user id.")
 flags.DEFINE_integer("experiment_max_num_trials", 200,
                      "Number of models to try (integer).")
+flags.DEFINE_bool(
+    "force_estimator", False,
+    "A flag to force the binary to run in estimator mode even "
+    "if Keras input is available.")
+
 
 FLAGS = flags.FLAGS
 
@@ -311,7 +324,7 @@ def run_parameterized_train_and_eval(phoenix_instance, oracle, tuner_id,
 
   Args:
     phoenix_instance: a phoenix.Phoenix object.
-    oracle: a kerastuner oracle.
+    oracle: a keras_tuner oracle.
     tuner_id: identifier of the tuner (integer).
     root_dir: the root directory to save the models.
     max_trials: the maximal number of trials allowed.
@@ -353,7 +366,7 @@ def run_parameterized_train_and_eval(phoenix_instance, oracle, tuner_id,
       metrics=evaluation_metrics,
       step=evaluation_metrics["global_step"])
   oracle.end_trial(trial.trial_id,
-                   kerastuner.engine.trial.TrialStatus.COMPLETED)
+                   keras_tuner.engine.trial.TrialStatus.COMPLETED)
   oracle.update_space(trial.hyperparameters)
   # Display needs the updated trial scored by the Oracle.
   # self._display.on_trial_end(self.oracle.get_trial(trial.trial_id))
@@ -361,11 +374,51 @@ def run_parameterized_train_and_eval(phoenix_instance, oracle, tuner_id,
   return True
 
 
+class ModelSearchTuner(keras_tuner.engine.tuner.Tuner):
+  """Very small wrapper to update the run_config before a trial."""
+
+  def run_trial(self, trial, *fit_args, **fit_kwargs):
+    with _set_model_dir_for_run_config(
+        model_dir=self.get_trial_dir(trial.trial_id)):
+      return super(ModelSearchTuner, self).run_trial(trial, *fit_args,
+                                                     **fit_kwargs)
+
+  # We do not need to populate the space for keras_tuner. We supply an oracle
+  # with space already populated.
+  def _populate_initial_space(self):
+    return None
+
+
+def run_keras_parameterized_train_and_eval(phoenix_instance, oracle,
+                                           data_provider):
+  """Train, getting parameters from a tuner.
+
+  Args:
+    phoenix_instance: a phoenix.Phoenix object.
+    oracle: a keras_tuner oracle.
+    data_provider: The data provider object.
+
+  Returns:
+    True if the tuner provided a trial to run, False if the tuner
+    has run out of trials.
+  """
+  tuner = ModelSearchTuner(
+      oracle=oracle,
+      hypermodel=phoenix_instance.keras_model_builder,
+      directory=FLAGS.model_dir)
+  x_train, y_label, valid = data_provider.get_keras_input(
+      batch_size=FLAGS.phoenix_batch_size)
+
+  tuner.search(
+      x_train, y_label, epochs=FLAGS.train_epochs, validation_data=valid)
+
+
 def main(unused_argv):
   filename = FLAGS.phoenix_spec_filename
   spec = phoenix_spec_pb2.PhoenixSpec()
   with tf.io.gfile.GFile(filename, "r") as f:
     text_format.Merge(f.read(), spec)
+
 
   dataset_provider = get_dataset_provider()
   loss_fn, metric_fn, predictions_fn = (
@@ -408,7 +461,7 @@ def main(unused_argv):
       spec, FLAGS.phoenix_train_steps)
 
   if FLAGS.hypertuning_method == "random":
-    oracle = kerastuner.tuners.randomsearch.RandomSearchOracle(
+    oracle = keras_tuner.oracles.RandomSearchOracle(
         objective="loss",
         max_trials=FLAGS.experiment_max_num_trials,
         seed=73,
@@ -416,7 +469,7 @@ def main(unused_argv):
         allow_new_entries=True,
         tune_new_entries=True)
   else:
-    oracle = kerastuner.tuners.bayesian.BayesianOptimizationOracle(
+    oracle = keras_tuner.oracles.BayesianOptimizationOracle(
         objective="loss",
         hyperparameters=hyperparameters,
         max_trials=FLAGS.experiment_max_num_trials)
@@ -427,14 +480,25 @@ def main(unused_argv):
   # pylint: enable=protected-access
 
   data_provider = get_dataset_provider()
-  while run_parameterized_train_and_eval(
-      phoenix_instance=phoenix_instance,
-      oracle=oracle,
-      tuner_id=tuner_id,
-      root_dir=FLAGS.model_dir,
-      max_trials=FLAGS.experiment_max_num_trials,
-      data_provider=data_provider,
-      train_steps=FLAGS.phoenix_train_steps,
-      eval_steps=FLAGS.phoenix_eval_steps,
-      batch_size=FLAGS.phoenix_batch_size):
-    pass
+  if (getattr(data_provider, "get_keras_input", None) is not None and
+      not FLAGS.force_estimator):
+    logging.info("Searching over TF keras models.")
+    tf.config.run_functions_eagerly(True)
+    run_keras_parameterized_train_and_eval(
+        phoenix_instance=phoenix_instance,
+        oracle=oracle,
+        data_provider=data_provider)
+
+  else:
+    logging.info("Searching over TF estimator models")
+    while run_parameterized_train_and_eval(
+        phoenix_instance=phoenix_instance,
+        oracle=oracle,
+        tuner_id=tuner_id,
+        root_dir=FLAGS.model_dir,
+        max_trials=FLAGS.experiment_max_num_trials,
+        data_provider=data_provider,
+        train_steps=FLAGS.phoenix_train_steps,
+        eval_steps=FLAGS.phoenix_eval_steps,
+        batch_size=FLAGS.phoenix_batch_size):
+      pass

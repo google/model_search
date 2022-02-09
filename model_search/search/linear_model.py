@@ -15,7 +15,7 @@
 # Lint as: python3
 """Linear model search algorithm for Phoenix."""
 
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search.architecture import architecture_utils
 from model_search.proto import phoenix_spec_pb2
 from model_search.search import common
@@ -55,7 +55,7 @@ class LinearModel(search_algorithm.SearchAlgorithm):
     """Args: phoenix_spec: phoenix_spec_pb2 for the experiment."""
     self._phoenix_spec = phoenix_spec
     self._block_indices = np.unique(
-        [blocks.BlockType.EMPTY_BLOCK.value] +
+        [block_builder.BlockType.EMPTY_BLOCK.value] +
         [idx.value for idx in common.block_indices(phoenix_spec)])
 
   def _predict_best_architecture(self, architectures, losses):
@@ -114,7 +114,8 @@ class LinearModel(search_algorithm.SearchAlgorithm):
     at either head or base, as determined by spec.network_alignment.
 
     Args:
-      architectures: List of iterables of blocks.BlockType values (or integers).
+      architectures: List of iterables of block_builder.BlockType values (or
+        integers).
       losses: Iterable of floats: objective value to be minimized.
 
     Returns:
@@ -129,13 +130,14 @@ class LinearModel(search_algorithm.SearchAlgorithm):
     loss, suggestion = self._predict_best_architecture(extended, losses)
     trimmed = np.array([
         block for block in suggestion
-        if block != blocks.BlockType.EMPTY_BLOCK.value
+        if block != block_builder.BlockType.EMPTY_BLOCK.value
     ])
     return loss, trimmed
 
   def _pad_architecture(self, arch, maxdepth):
     """Pad with empty blocks according to spec network alignment."""
-    empties = [blocks.BlockType.EMPTY_BLOCK.value] * (maxdepth - len(arch))
+    empties = [block_builder.BlockType.EMPTY_BLOCK.value] * (
+        maxdepth - len(arch))
     align = self._phoenix_spec.linear_model.network_alignment
     if align == phoenix_spec_pb2.LinearModelSpec.NET_ALIGN_BASE:
       return empties + list(arch)
@@ -161,7 +163,8 @@ class LinearModel(search_algorithm.SearchAlgorithm):
       # It should not be a part of our search problem.
       # It will be placed by architecture_utils.fix_architecture_order().
       filtered = np.array([
-          block for block in architecture if block not in blocks.FLATTEN_TYPES
+          block for block in architecture
+          if block not in block_builder.FLATTEN_TYPES
       ])
       architectures.append(filtered)
       losses.append(trial.final_measurement.objective_value)
@@ -188,7 +191,7 @@ class LinearModel(search_algorithm.SearchAlgorithm):
     explore_mode = common.random(
         self._phoenix_spec.increase_complexity_probability)
 
-    new_block = blocks.BlockType[hparams.new_block_type]
+    new_block = block_builder.BlockType[hparams.new_block_type]
 
     if suggestion.size <= allowed_depth and explore_mode:
       # increase_structure_depth expects that the architecture contains a
@@ -209,7 +212,7 @@ class LinearModel(search_algorithm.SearchAlgorithm):
       # The linear model suggested a novel architecture; use it.
       pass
 
-    suggestion = [blocks.BlockType(b) for b in suggestion]
+    suggestion = [block_builder.BlockType(b) for b in suggestion]
     return np.array(
         architecture_utils.fix_architecture_order(
             suggestion, self._phoenix_spec.problem_type)), None

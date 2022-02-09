@@ -24,7 +24,7 @@ import cmath
 import os
 
 from absl import logging
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search.architecture import architecture_utils
 from model_search.search import search_algorithm
 import numpy as np
@@ -93,7 +93,7 @@ class Harmonica(search_algorithm.SearchAlgorithm):
     self._num_params = self._phoenix_spec.minimum_depth
     # Blocktype to index -- needed to translate block type to a one-hot vector.
     self._block_indices = [
-        blocks.BlockType[block_type]
+        block_builder.BlockType[block_type]
         for block_type in self._phoenix_spec.blocks_to_use
     ]
     # Minimal amount of data point before applying regression.
@@ -133,9 +133,9 @@ class Harmonica(search_algorithm.SearchAlgorithm):
     for block in architecture:
       # These are connector blocks (non-trainable) that connect CNN and DNN.
       # They should not be a part of out search problem.
-      if (block == blocks.BlockType.FLATTEN or
-          block == blocks.BlockType.DOWNSAMPLE_FLATTEN or
-          block == blocks.BlockType.PLATE_REDUCTION_FLATTEN):
+      if (block == block_builder.BlockType.FLATTEN or
+          block == block_builder.BlockType.DOWNSAMPLE_FLATTEN or
+          block == block_builder.BlockType.PLATE_REDUCTION_FLATTEN):
         continue
       index = self._block_indices.index(block)
       for t in range(category_size):
@@ -288,7 +288,7 @@ class Harmonica(search_algorithm.SearchAlgorithm):
     # Not enough data points for regression. Falling on hparams architecture.
     if len(y) < self._min_for_regression:
       initial_architecture = [
-          blocks.BlockType[block_type]
+          block_builder.BlockType[block_type]
           for block_type in hparams.initial_architecture
       ]
       return np.array(

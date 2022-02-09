@@ -154,8 +154,8 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
           "logits_dimension":
               10,
           "expected_logits": [[
-              -0.1481, 0.3328, 0.3028, 0.5652, 0.6860, 0.06171, 0.09998,
-              -0.2622, 0.2186, -0.1322
+              -0.011483, 0.038699, -0.047852, 0.063045, 0.08866, -0.00095,
+              -0.017504, -0.06242, 0.06376, -0.092758
           ]]
       },
       {
@@ -175,8 +175,8 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
           "logits_dimension":
               10,
           "expected_logits": [[
-              0.7001, -0.06655, -0.1711, 0.1274, -0.8175, 0.2932, 0.06242,
-              0.2182, -0.06626, 0.7882
+              0.146662, -0.014685, -0.09553, -0.00853, -0.081524, 0.103516,
+              0.030273, 0.036939, 0.013888, 0.073447
           ]],
       },
       {
@@ -198,8 +198,8 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
           "logits_dimension":
               10,
           "expected_logits": [[
-              -0.1235, 0.3672, 0.1316, 0.8520, 0.4459, -0.1585, 0.2064, -0.1511,
-              0.3595, -0.1060
+              0.021225, 0.046355, 0.114048, 0.083442, 0.199439, 0.161184,
+              0.066445, -0.009043, 0.006886, -0.091054
           ]]
       },
       {
@@ -218,8 +218,8 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
           "logits_dimension":
               10,
           "expected_logits": [[
-              -0.1267, 0.4418, -0.6564, -0.1298, 0.2320, -0.2099, -0.3553,
-              0.2380, -0.3492, 0.03639
+              -0.18706, 0.39722, -0.4535, -0.11525, 0.16784, -0.16267, -0.37001,
+              0.1183, -0.22078, -0.1590
           ]]
       },
       {
@@ -238,8 +238,8 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
           "logits_dimension":
               10,
           "expected_logits": [[
-              -0.5352, -0.7152, -0.6324, -0.1227, -0.1643, -0.2359, 0.1793,
-              -0.2127, 0.4157, 0.2386
+              -0.4340, -0.6529, -0.73601, -0.0029473, -0.09244, -0.40827, 0.319,
+              -0.17377, 0.36107, 0.2386
           ]]
       },
       {
@@ -260,8 +260,8 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
           "logits_dimension":
               10,
           "expected_logits": [[
-              -0.01021, 0.1801, -0.2899, 0.1427, 0.2179, -0.1162, 0.3315,
-              0.06475, -0.08932, -0.7199
+              -0.03144, 0.28124, -0.28010, 0.09960, 0.28147, -0.08596, 0.14614,
+              0.18214, -0.13887, -0.73174
           ]]
       },
       {
@@ -279,10 +279,10 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
               -1,
           "logits_dimension":
               3,
-          "expected_logits": [[[0.006536, 0.001960, -0.002512],
-                               [0.006208, -0.003307, 0.005386],
-                               [0.005239, -0.01759, 0.01820],
-                               [0.007334, -0.02855, 0.02496]]]
+          "expected_logits": [[[-0.002586, -0.0102, 0.001244],
+                               [-0.014313, -0.000468, 0.006175],
+                               [-0.029063, 0.007654, 0.008976],
+                               [-0.046262, 0.015285, 0.015905]]]
       },
       {
           "testcase_name":
@@ -299,10 +299,10 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
               -1,
           "logits_dimension":
               3,
-          "expected_logits": [[0.006536, 0.001960, -0.002512],
-                              [-0.007125, -0.008556, 0.001411],
-                              [0.02144, -0.004181, 0.001058],
-                              [0.007763, -0.02296, 0.006935]],
+          "expected_logits": [[-0.002586, -0.0102, 0.001244],
+                              [-0.023986, 0.006879, 0.007942],
+                              [-0.028532, -0.006273, -0.005542],
+                              [-0.028763, 0.017457, 0.016798]],
           "lengths": [1, 2, 3, 4],
       },
       {
@@ -320,10 +320,10 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
               -1,
           "logits_dimension":
               3,
-          "expected_logits": [[[-9.769e-05, -1.403e-03, -3.220e-03],
-                               [2.679e-03, -4.195e-03, -8.697e-03],
-                               [3.288e-03, -2.546e-03, -1.710e-02],
-                               [5.260e-03, -7.602e-04, -2.394e-02]]],
+          "expected_logits": [[[0.002981, -0.005376, -0.005888],
+                               [0.006844, -0.007068, -0.009205],
+                               [0.012061, -0.009141, -0.014098],
+                               [0.016091, -0.009119, -0.016839]]],
       },
   )
   def test_construct_network(self,
@@ -372,28 +372,20 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
                   ],
                   tower_name="test_tower"),
           "expected_output": [
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/biases",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/weights",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/biases",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/weights",
-              "Phoenix/test_tower/last_dense_1334/dense/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/gamma",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/beta",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_mean",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_variance",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/gamma",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/beta",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_mean",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_variance",
               "Phoenix/test_tower/last_dense_1334/dense/kernel",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_mean",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_mean",
+              "Phoenix/test_tower/last_dense_1334/dense/bias"
           ],
           "new_tower_name":
               "test_tower",
@@ -410,28 +402,20 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
                   ],
                   tower_name="test_tower_2"),
           "expected_output": [
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/biases",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/weights",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/biases",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/"
-              "Conv/weights",
-              "Phoenix/test_tower/last_dense_1334/dense/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/gamma",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/beta",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_mean",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_variance",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/kernel",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/gamma",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/beta",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_mean",
+              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/batch_normalization/moving_variance",
               "Phoenix/test_tower/last_dense_1334/dense/kernel",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_mean",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "beta",
-              "Phoenix/test_tower/2_FIXED_CHANNEL_CONVOLUTION_64_13/BatchNorm/"
-              "moving_mean",
+              "Phoenix/test_tower/last_dense_1334/dense/bias"
           ],
           "new_tower_name":
               "test_tower_2",
@@ -448,15 +432,12 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
                   ],
                   tower_name="test_tower"),
           "expected_output": [
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/"
-              "Conv/weights",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/biases",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_mean",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "moving_variance",
-              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/BatchNorm/"
-              "beta"
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/gamma",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/beta",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_mean",
+              "Phoenix/test_tower/1_FIXED_CHANNEL_CONVOLUTION_16_1/batch_normalization/moving_variance"
           ],
           "new_tower_name":
               "test_tower",
@@ -507,5 +488,4 @@ class GraphArchitectureTest(parameterized.TestCase, tf.test.TestCase):
 
 
 if __name__ == "__main__":
-  tf.enable_v2_behavior()
   tf.test.main()

@@ -34,10 +34,24 @@ class Provider(object, metaclass=abc.ABCMeta):
       features and label batch tensors. It is responsible for parsing the
       dataset and buffering data.
     * The feature_columns for this dataset.
-    * problem statement.
+    * The number of classes.
+
+  For keras related training, we assume multiclass classification, and the user
+  only needs to implement the following function:
+    * def get_keras_input(self, batch_size):
+        Args:
+          batch_size - an integer holding the batch size.
+
+        Returns:
+          x, y, and validation_data used for keras fit
+    * The feature_columns for this dataset (Please note that you need to supply
+      Keras compatible feature columns.
+    * The number of classes.
+
+  Example of both interfaces implemented can be found in csv_data.py
   """
 
-  def get_input_fn(self, hparams, mode, batch_size: int):
+  def get_input_fn(self, hparams, mode, batch_size):
     """Returns an `input_fn` for train and evaluation.
 
     Args:
@@ -107,10 +121,31 @@ class Provider(object, metaclass=abc.ABCMeta):
           length = ...  # if problem_type is an RNN type, Tensor, else None.
 
         return input_layer, lengths
+
+    Or
+      A function like the above with additional argument params. That is:
+
+      def input_layer_fn(features,
+                         is_training,
+                         params,
+                         scope_name="Phoenix/Input",
+                         lengths_feature_name=None):
+        with tf.variable_scope(scope_name):
+          # create associated variables
+          input_layer = ...
+          length = ...  # if problem_type is an RNN type, Tensor, else None.
+
+        return input_layer, lengths
     """
     feature_columns = self.get_feature_columns()
 
     return utils.default_get_input_layer_fn(problem_type, feature_columns)
+
+  def get_keras_input_layer_fn(self, problem_type):
+
+    feature_columns = self.get_feature_columns()
+
+    return utils.default_get_keras_input_layer_fn(problem_type, feature_columns)
 
 
 register_provider = functools.partial(

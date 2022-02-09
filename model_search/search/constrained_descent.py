@@ -17,7 +17,7 @@
 
 from absl import logging
 
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search.architecture import architecture_utils
 from model_search.search import common
 from model_search.search import search_algorithm
@@ -39,7 +39,7 @@ class ConstrainedDescent(search_algorithm.SearchAlgorithm):
     self._metadata = metadata
 
   def _is_reduction_block(self, block):
-    name = blocks.BlockType(block).name
+    name = block_builder.BlockType(block).name
     return "REDUCTION" in name or "DOWNSAMPLE" in name or "POOL" in name
 
   def _remove_reduction_blocks(self, architecture):
@@ -57,7 +57,7 @@ class ConstrainedDescent(search_algorithm.SearchAlgorithm):
     for i, block in enumerate(architecture):
       result.append(block)
       if (i + 1) % every == 0:
-        result.append(blocks.BlockType[reduction_type].value)
+        result.append(block_builder.BlockType[reduction_type].value)
     return np.array(result)
 
   def _get_allowed_depth(self, num_completed_trials):
@@ -79,7 +79,8 @@ class ConstrainedDescent(search_algorithm.SearchAlgorithm):
     """See the base class for details."""
     del my_trial_id  # Unused.
 
-    new_block = blocks.BlockType[hparams.new_block_type]
+    new_block = block_builder.BlockType[common.get_random_block(
+        self._phoenix_spec.blocks_to_use)]
     if self._is_reduction_block(new_block):
       raise ValueError("ConstrainedDescent should not have reduction blocks in "
                        "its search space.")
@@ -94,7 +95,9 @@ class ConstrainedDescent(search_algorithm.SearchAlgorithm):
     # No feasible trials yet, use initial architecture passed in from hparams.
     if not best_trials:
       best_architecture = common.encode_architecture(
-          hparams.initial_architecture, self._phoenix_spec.problem_type)
+          common.get_random_architecture(self._phoenix_spec.blocks_to_use,
+                                         self._phoenix_spec.minimum_depth),
+          self._phoenix_spec.problem_type)
       best_trial = None
     else:
       best_architecture, best_trial = (
@@ -131,7 +134,9 @@ class ConstrainedDescent(search_algorithm.SearchAlgorithm):
     output_architecture = self._add_reduction_blocks(
         output_architecture, self._phoenix_spec.num_blocks_in_cell,
         self._phoenix_spec.reduction_block_type)
-    output_architecture = [blocks.BlockType(x) for x in output_architecture]
+    output_architecture = [
+        block_builder.BlockType(x) for x in output_architecture
+    ]
     output_architecture = np.array(
         architecture_utils.fix_architecture_order(
             output_architecture, self._phoenix_spec.problem_type))

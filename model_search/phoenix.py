@@ -15,20 +15,20 @@
 # Lint as: python3
 """A Phoenix estimator builder."""
 
+import functools
+import inspect
+
 from absl import logging
-import kerastuner
+import keras_tuner
 
 from model_search import controller
-from model_search import ensembler
 from model_search import hparam as hp
 from model_search import loss_fns
 from model_search import metric_fns
 from model_search import task_manager
 from model_search.architecture import architecture_utils
-from model_search.ensembler import EnsembleLogits
 from model_search.generators import base_tower_generator
 from model_search.generators import trial_utils
-from model_search.meta import distillation
 from model_search.meta import transfer_learning
 from model_search.metadata import ml_metadata_db
 from model_search.proto import phoenix_spec_pb2
@@ -48,6 +48,19 @@ _TL_HOOKS = {
     .LOSS_WEIGHTED_AVERAGE_TRANSFER_LEARNING:
         transfer_learning.LossWeightedAverageTransferLearningHook,
 }
+
+
+def aggregate_initial_architecture(hparams):
+  """Helper function to aggregate initial architecture into an array hparam."""
+  output = hparams.copy()
+  initial_architecture_size = len(
+      [hp for hp in hparams.keys() if hp.startswith("initial_architecture_")])
+  if initial_architecture_size:
+    output["initial_architecture"] = [
+        hparams["initial_architecture_{}".format(i)]
+        for i in range(initial_architecture_size)
+    ]
+  return output
 
 
 def _merge_hparams(original_hparams, overrides):
@@ -140,7 +153,8 @@ class Phoenix(object):
                loss_fn=None,
                metric_fn=None,
                predictions_fn=None,
-               metadata=None):
+               metadata=None,
+               optimizer_fn=None):
     """Constructs a Phoenix instance.
 
     Args:
@@ -165,9 +179,13 @@ class Phoenix(object):
         problems.
       loss_fn: A function to compute the loss. Ignored if `head` is not None.
         Must accept as inputs a `labels` Tensor, a `logits` Tensor, and
-        optionally a `weights` Tensor. `weights` must either be rank 0 or have
+        a `weights` Tensor. `weights` must either be rank 0 or have
         the same rank as labels. If None, Phoenix defaults to using softmax
         cross-entropy.
+        Additional `params` holding the hparameters of the trial can be added
+        as input to the signature.
+        For multitaks, you have the option to pass a dict of functions keyed
+        by the task name to apply different loss functions for different tasks.
       metric_fn: Metrics for Tensorboard. Ignored if `head` is not None.
         metric_fn takes `label` and `predictions` as input, and outputs a
         dictionary of (tensor, update_op) tuples. `label` is a Tensor (in the
@@ -183,8 +201,16 @@ class Phoenix(object):
       predictions_fn: A function to convert eval logits to the
         `predictions` dictionary passed to metric_fn. If `None`, defaults to
         computing 'predictions', 'probabilities', and 'log_probabilities'.
+        For multitaks, you have the option to pass a dict of functions keyed
+        by the task name to apply different prediction functions for different
+        tasks.
       metadata: An object that implements metadata api in
         learning.adanets.phoenix.metadata.Metadata
+      optimizer_fn: A function that follows two possible signatures: 1. takes
+        `params` as args and returns a tensorflow v1 optimizer instance.
+        2. A function with no args that returns a tensorflow v1 optimizer.
+        Please keep as None to use our default optimizers (i.e. let the
+        search choose an optimizer).
     """
 
     # Check Phoenix preconditions and fail early if any of them are broken.
@@ -217,8 +243,6 @@ class Phoenix(object):
 
     self._phoenix_spec = phoenix_spec
     self._input_layer_fn = input_layer_fn
-    self._ensembler = ensembler.Ensembler(phoenix_spec)
-    self._distiller = distillation.Distiller(phoenix_spec.distillation_spec)
     self._study_owner = study_owner
     self._study_name = study_name
     self._head = head
@@ -240,60 +264,159 @@ class Phoenix(object):
                                                  study_owner)
     else:
       self._metadata = metadata
-    self._task_manager = task_manager.TaskManager(phoenix_spec)
+    self._task_manager = task_manager.TaskManager(
+        phoenix_spec=phoenix_spec,
+        logits_dimension=logits_dimension,
+        loss_fn=self._loss_fn,
+        head=self._head)
     self._controller = controller.InProcessController(
         phoenix_spec=phoenix_spec, metadata=self._metadata)
+    self._user_optimizer_fn = optimizer_fn
 
   @property
   def metadata(self):
     return self._metadata
 
-  def _get_loss_fn(self, features, mode, my_id, teacher_logits_spec=None):
-    """Gets the applicable loss_fn to use.
+  def keras_compile(self, towers, hparams):
+    """Compiles the keras model based on hparams."""
+    optimizer_args = dict()
 
-    If head is not None, wraps the head's loss function to match the interface
-    Phoenix expects (see loss_fns.py), unless distillation is being used.
+    # Learning rate
+    lr = hparams.learning_rate
+    if getattr(hparams, "exponential_decay_rate", None) is not None:
+      max_times = self._phoenix_spec.learning_spec.max_decay_times
+      steps = hparams.exponential_decay_steps
+      decay = hparams.exponential_decay_rate
+      lr = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
+          boundaries=[steps * j for j in range(1, max_times)],
+          values=[lr * (decay**i) for i in range(1, max_times + 1)])
+    optimizer_args["learning_rate"] = lr
 
-    Args:
-      features: The features pass to model_fn.
-      mode: The mode passed to model_fn.
-      my_id: My trial id (integer).
-      teacher_logits_spec: Logits of the teacher network to use when distilling.
+    # Gradient Clip
+    if getattr(hparams, "gradient_max_norm", None) is not None:
+      optimizer_args["clipnorm"] = hparams.gradient_max_norm
 
-    Returns:
-      The loss_fn to use.
-    """
+    # L2 Error
+    if getattr(hparams, "l2_regularization", None) is not None:
+      logging.error("Keras mode doesn't support L2 regularization.")
 
-    if (mode == tf.estimator.ModeKeys.TRAIN and
-        teacher_logits_spec is not None):
-      return distillation.get_distillation_loss_fn(
-          teacher_logits=teacher_logits_spec.logits,
-          distillation_spec=self._phoenix_spec.distillation_spec,
-          my_id=my_id,
-          original_loss_fn=self._loss_fn)
+    # Optimizer
+    optimizer = None
+    if hparams.optimizer == "sgd":
+      optimizer = tf.keras.optimizers.SGD(**optimizer_args)
+    elif hparams.optimizer == "momentum":
+      optimizer = tf.keras.optimizers.SGD(**optimizer_args, momentum=0.9)
+    elif hparams.optimizer == "adam":
+      optimizer = tf.keras.optimizers.Adam(**optimizer_args)
+    elif hparams.optimizer == "adagrad":
+      optimizer = tf.keras.optimizers.Adagrad(**optimizer_args)
+    elif hparams.optimizer == "rmsprop":
+      optimizer = tf.keras.optimizers.RMSprop(**optimizer_args)
+    elif hparams.optimizer == "lazy_adam":
+      logging.error("Lazy adam is not implemented in Keras. Falling back to "
+                    "Adam")
+      optimizer = tf.keras.optimizers.Adam(**optimizer_args)
 
-    if not self._head:
-      return self._loss_fn
+    towers["search_generator"][0].compile(
+        optimizer=optimizer,
+        loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True))
+    return towers["search_generator"][0]
 
-    def head_loss_fn(labels, logits, weights=1.0):
-      """Create a loss fn from the Head object."""
-      del weights  # Head already has weights built in.
+  def keras_model_builder(self,
+                          hparams,
+                          run_config=None,
+                          is_training=None,
+                          input_layer_fn=None,
+                          compile_model=True):
+    """Builds a keras model based on hparams."""
+    if compile_model:
+      # Validate keras mode config is correct.
+      if self._phoenix_spec.HasField("ensemble_spec"):
+        logging.error("Cannot run ensembling in keras mode.")
+        self._phoenix_spec.ClearField("ensemble_spec")
+      if self._phoenix_spec.HasField("distillation_spec"):
+        logging.error("Cannot run distillation in keras mode.")
+        self._phoenix_spec.ClearField("distillation_spec")
 
-      training_loss = None
-      # There is two types of head, and their api is different.
-      if getattr(self._head, "loss", None) is not None:
-        training_loss = self._head.loss(
-            labels=labels, logits=logits, features=features, mode=mode)
-      elif getattr(self._head, "create_loss", None) is not None:
-        training_loss = self._head.create_loss(
-            labels=labels, logits=logits, features=features,
-            mode=mode).training_loss
-      else:
-        logging.fatal("unable to find loss function in Head object.")
+    run_config_ = run_config
+    if run_config is None:
+      run_config_ = tf.estimator.RunConfig()
 
-      return training_loss
+    if isinstance(hparams, hp.HParams):
+      params = hparams
+    elif isinstance(hparams,
+                    keras_tuner.engine.hyperparameters.HyperParameters):
+      parameter_values = aggregate_initial_architecture(hparams.values)
+      params = hp.HParams(**parameter_values)
+    else:
+      parameter_values = aggregate_initial_architecture(hparams.values())
+      params = hp.HParams(**parameter_values)
 
-    return head_loss_fn
+    logging.info(run_config_)
+    logging.info(run_config_.model_dir)
+    my_id = architecture_utils.DirectoryHandler.get_trial_id(
+        run_config_.model_dir, self._phoenix_spec)
+
+    # Get all information we have so far.
+    trials = []
+    # TODO(b/172564129): Only the chief needs the trials. Test to see if
+    # workers need them
+    if not self._phoenix_spec.HasField("replay"):
+      trials = self._metadata.get_completed_trials()
+    else:
+      params = _merge_hparams(
+          params,
+          hp.HParams.from_proto(self._phoenix_spec.replay.towers[my_id -
+                                                                 1].hparams))
+      params.set_hparam(
+          "initial_architecture",
+          self._phoenix_spec.replay.towers[my_id - 1].architecture[:])
+
+    # Update our database - clean up and sync ops.
+    if run_config_.is_chief:
+      self._metadata.before_generating_trial_model(my_id, run_config_.model_dir)
+
+    # Determine whether to do ensemble search or distillation on this trial.
+    trial_mode = trial_utils.get_trial_mode(
+        self._phoenix_spec.ensemble_spec, self._phoenix_spec.distillation_spec,
+        my_id)
+
+    generators = self._controller.get_generators(my_id, trials)
+    towers = {}
+    for name, generator in generators.items():
+      logging.info(generators)
+      tower = generator.instance.generate(
+          input_layer_fn=input_layer_fn,
+          trial_mode=trial_mode,
+          logits_dimension=self._logits_dimension,
+          hparams=params,
+          run_config=run_config_,
+          is_training=is_training,
+          trials=generator.relevant_trials)
+      towers[name] = tower
+
+    if input_layer_fn is not None and self._phoenix_spec.is_input_shared:
+      shared_input_tensor, shared_lengths = input_layer_fn(
+          is_training=is_training, scope_name="Phoenix/SharedInput")
+      for generator_towers in towers.values():
+        for tower in generator_towers:
+          tower.add_feature_columns_input_layer(shared_input_tensor,
+                                                shared_lengths)
+    elif input_layer_fn is not None:
+      logging.info(towers)
+      for generator_towers in towers.values():
+        for tower in generator_towers:
+          if not tower.has_input_tensor():
+            input_tensor, lengths = input_layer_fn(
+                is_training=is_training,
+                scope_name="{}/input".format(tower.name))
+            tower.add_feature_columns_input_layer(input_tensor, lengths)
+
+    if compile_model:
+      # Keras mode: Search only
+      return self.keras_compile(towers, params)
+
+    return towers, trials
 
   def _make_model_fn(self, run_config, train_steps, use_tpu=False):
     """Returns a model_fn for the estimator."""
@@ -329,59 +452,32 @@ class Phoenix(object):
         if isinstance(features, dict) and lengths_feature_name not in features:
           lengths_feature_name = ""
 
-      shared_input_tensor = None
-      shared_lengths = None
-      # Create the input.
-      if self._phoenix_spec.is_input_shared:
-        shared_input_tensor, shared_lengths = self._input_layer_fn(
+      if "params" in inspect.signature(self._input_layer_fn).parameters:
+        input_layer_fn = functools.partial(
+            self._input_layer_fn,
             features=features,
-            is_training=is_training,
-            scope_name="Phoenix/SharedInput",
+            params=hparams,
+            lengths_feature_name=lengths_feature_name)
+      else:
+        input_layer_fn = functools.partial(
+            self._input_layer_fn,
+            features=features,
             lengths_feature_name=lengths_feature_name)
 
-      # Get all information we have so far.
-      trials = []
-      # TODO(b/172564129): Only the chief needs the trials. Test to see if
-      # workers need them
-      if not self._phoenix_spec.HasField("replay"):
-        trials = self._metadata.get_completed_trials()
-      else:
-        hparams = _merge_hparams(
-            hparams,
-            hp.HParams.from_proto(self._phoenix_spec.replay.towers[my_id -
-                                                                   1].hparams))
-        hparams.set_hparam(
-            "initial_architecture",
-            self._phoenix_spec.replay.towers[my_id - 1].architecture[:])
+      towers, trials = self.keras_model_builder(
+          hparams=hparams,
+          is_training=is_training,
+          run_config=run_config,
+          input_layer_fn=input_layer_fn,
+          compile_model=False)
 
-      # Update our database - clean up and sync ops.
-      if run_config.is_chief:
-        self._metadata.before_generating_trial_model(my_id,
-                                                     run_config.model_dir)
+      for generator_towers in towers.values():
+        for tower in generator_towers:
+          tower(None, training=is_training)
 
-      # Determine whether to do ensemble search or distillation on this trial.
       trial_mode = trial_utils.get_trial_mode(
           self._phoenix_spec.ensemble_spec,
           self._phoenix_spec.distillation_spec, my_id)
-
-      generators = self._controller.get_generators(my_id, trials)
-      logit_specs = {}
-      architectures = {}
-      for name, generator in generators.items():
-        logging.info(generators)
-        logit_spec, architecture = generator.instance.generate(
-            features=features,
-            input_layer_fn=self._input_layer_fn,
-            trial_mode=trial_mode,
-            shared_input_tensor=shared_input_tensor,
-            shared_lengths=shared_lengths,
-            logits_dimension=self._logits_dimension,
-            hparams=hparams,
-            run_config=run_config,
-            is_training=is_training,
-            trials=generator.relevant_trials)
-        logit_specs[name] = logit_spec
-        architectures[name] = architecture
 
       training_hooks = []
       # TODO(b/172564129): Figure out how to handle transfer learning for multi
@@ -413,37 +509,7 @@ class Phoenix(object):
           for key, value in hparams.values().items()
           if key in learning_rate_spec_keys
       }
-
-      # Create logits of the ensemble and training ops, checking whether to
-      # calculate using the Ensembler or the Distiller.
-      teacher_logits = None
       tower_name = None
-      priors_logits_specs = []
-      if base_tower_generator.PRIOR_GENERATOR in logit_specs.keys():
-        priors_logits_specs = logit_specs[base_tower_generator.PRIOR_GENERATOR]
-      if base_tower_generator.REPLAY_GENERATOR in logit_specs.keys():
-        priors_logits_specs = logit_specs[base_tower_generator.REPLAY_GENERATOR]
-      if trial_mode == trial_utils.TrialMode.ENSEMBLE_SEARCH:
-        ensemble_logits = self._ensembler.bundle_logits(
-            priors_logits_specs=priors_logits_specs,
-            search_logits_specs=logit_specs.get(
-                base_tower_generator.SEARCH_GENERATOR, []),
-            logits_dimension=self._logits_dimension)
-      elif trial_mode == trial_utils.TrialMode.DISTILLATION:
-        # TODO(b/146067345): Initialize some random architecture if search
-        # logits specs is empty.
-        ensemble_logits = self._distiller.bundle_logits(
-            priors_logits_specs=priors_logits_specs,
-            search_logits_specs=logit_specs.get(
-                base_tower_generator.SEARCH_GENERATOR, []))
-        teacher_logits = ensemble_logits.teacher_logits_spec
-        tower_name = base_tower_generator.SEARCH_GENERATOR
-      else:
-        ensemble_logits = EnsembleLogits(
-            train_logits_specs=logit_specs.get(
-                base_tower_generator.SEARCH_GENERATOR, []),
-            eval_logits_spec=logit_specs.get(
-                base_tower_generator.SEARCH_GENERATOR, [])[0])
 
       # Create the metric_fn if it wasn't specified.
       if not self._metric_fn:
@@ -457,19 +523,23 @@ class Phoenix(object):
           params=hparams,
           learning_rate_spec=learning_rate_spec,
           use_tpu=use_tpu,
-          train_logits_specs=ensemble_logits.train_logits_specs,
-          eval_logits_spec=ensemble_logits.eval_logits_spec,
+          trial_mode=trial_mode,
+          towers=towers,
           labels=labels,
           mode=mode,
-          lengths=shared_lengths,
-          loss_fn=self._get_loss_fn(features, mode, my_id, teacher_logits),
+          my_id=my_id,
           model_directory=run_config.model_dir,
-          predictions_fn=self._predictions_fn)
+          predictions_fn=self._predictions_fn,
+          optimizer_fn=self._user_optimizer_fn)
 
       if run_config.is_chief:
         self._metadata.after_generating_trial_model(my_id)
-        search_architecture = architectures.get(
-            base_tower_generator.SEARCH_GENERATOR, [["no_search"]])
+        search_architecture = [["no_search"]]
+        if base_tower_generator.SEARCH_GENERATOR in towers.keys():
+          search_architecture = [
+              t.architecture
+              for t in towers[base_tower_generator.SEARCH_GENERATOR]
+          ]
         trial_utils.write_replay_spec(
             model_dir=run_config.model_dir,
             filename=REPLAY_CONFIG_FILENAME,
@@ -484,16 +554,14 @@ class Phoenix(object):
             model_spec.train_op, train_steps,
             base_tower_generator.SEARCH_GENERATOR)
 
-      if isinstance(labels, dict):
-        label_weights = [
-            label_spec.weight_feature_name
+      if (isinstance(labels, dict) and
+          not self._phoenix_spec.pass_label_dict_as_is):
+        label_names = [
+            label_spec.label_name
             for label_spec in self._phoenix_spec.multi_task_spec
-            if not label_spec.weight_is_a_feature
         ]
         actual_labels = {
-            name: label
-            for name, label in labels.items()
-            if name not in label_weights
+            name: label for name, label in labels.items() if name in label_names
         }
       else:
         actual_labels = labels
@@ -525,7 +593,7 @@ class Phoenix(object):
         return self._head.create_estimator_spec(
             features,
             mode,
-            ensemble_logits.eval_logits_spec.logits,
+            model_spec.eval_logits,
             labels,
             train_op_fn=lambda _: train_op)
 
@@ -641,7 +709,7 @@ class Phoenix(object):
   @staticmethod
   def get_keras_hyperparameters_space(phoenix_spec, train_steps):
     """Gets the Phoenix search space as keras Hyperparameters object."""
-    hp_space = kerastuner.engine.hyperparameters.HyperParameters()
+    hp_space = keras_tuner.HyperParameters()
     hp_space.merge(
         architecture_utils.get_blocks_search_space(phoenix_spec.blocks_to_use))
     hp_space.Float("learning_rate", 1e-6, 0.01, sampling="log")

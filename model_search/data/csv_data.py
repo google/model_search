@@ -14,6 +14,8 @@
 """Simple csv reader for small classification problems."""
 
 from model_search.data import data
+import numpy as np
+import pandas as pd
 import tensorflow.compat.v2 as tf
 
 
@@ -25,8 +27,10 @@ class Provider(data.Provider):
                logits_dimension,
                record_defaults,
                filename,
+               validation_filename=None,
                field_delim=","):
     self._filename = filename
+    self._validation_filename = validation_filename
     self._logits_dimension = logits_dimension
     self._record_defaults = record_defaults
     self._field_delim = field_delim
@@ -41,9 +45,12 @@ class Provider(data.Provider):
     def input_fn(params=None):
       """Provides batches of data."""
       del params
+      filename = self._filename
+      if self._validation_filename and mode != tf.estimator.ModeKeys.TRAIN:
+        filename = self._validation_filename
 
       features_dataset = tf.data.experimental.CsvDataset(
-          self._filename,
+          filename,
           record_defaults=self._record_defaults,
           header=True,
           field_delim=self._field_delim,
@@ -94,3 +101,22 @@ class Provider(data.Provider):
         tf.feature_column.numeric_column(key=key) for key in features
     ]
     return feature_columns
+
+  def get_keras_input(self, batch_size):
+    """Returns keras input as explained in data.py module."""
+    del batch_size
+    dataset = pd.read_csv(self._filename)
+    labels = dataset.pop(dataset.columns.values[self._label_index])
+    labels = np.array(labels)
+    features = np.array(dataset)
+
+    validation_features = None
+    validation_labels = None
+    if self._validation_filename:
+      validation_data = pd.read_csv(self._validation_filename)
+      validation_labels = validation_data.pop(
+          validation_data.columns.values[self._label_index])
+      validation_labels = np.array(validation_labels)
+      validation_features = np.array(validation_data)
+
+    return features, labels, (validation_features, validation_labels)

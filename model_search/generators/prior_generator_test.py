@@ -37,10 +37,8 @@ _NONADAPTIVE_GRAPH_NODES = [
     u'zeros/shape_as_tensor',
     u'zeros/Const',
     u'zeros',
-    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/weights',
-    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/LeakyRelu',
-    u'Phoenix/prior_generator_0/2_FIXED_CHANNEL_CONVOLUTION_64_13/Conv/biases',
-    u'Phoenix/prior_generator_0/2_FIXED_CHANNEL_CONVOLUTION_64_13/LeakyRelu',
+    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel',
+    u'Phoenix/prior_generator_0/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias',
     u'Phoenix/prior_generator_0/3_PLATE_REDUCTION_FLATTEN_1334/Mean',
     u'Phoenix/prior_generator_0/last_dense_1334/dense/kernel',
     u'Phoenix/prior_generator_0/last_dense_1334/logits',
@@ -48,22 +46,14 @@ _NONADAPTIVE_GRAPH_NODES = [
     u'architectures/prior_generator_0',
     u'params/prior_generator_0/dropout_rate',
     u'params/prior_generator_0/is_frozen',
-    u'checkpoint_initializer/prefix',
-    u'checkpoint_initializer/tensor_names',
-    u'checkpoint_initializer/shape_and_slices',
-    u'checkpoint_initializer',
-    u'checkpoint_initializer_1/prefix',
-    u'Phoenix/prior_generator_1/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/weights',
-    u'Phoenix/prior_generator_1/1_FIXED_CHANNEL_CONVOLUTION_16_1/LeakyRelu',
-    u'Phoenix/prior_generator_1/2_FIXED_CHANNEL_CONVOLUTION_64_13/Conv/biases',
-    u'Phoenix/prior_generator_1/2_FIXED_CHANNEL_CONVOLUTION_64_13/LeakyRelu',
+    u'Phoenix/prior_generator_1/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel',
+    u'Phoenix/prior_generator_1/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias',
     u'Phoenix/prior_generator_1/3_PLATE_REDUCTION_FLATTEN_1334/Mean',
     u'Phoenix/prior_generator_1/last_dense_1334/logits',
     u'Phoenix/prior_generator_1/last_dense_1334/StopGradient',
     u'architectures/prior_generator_1',
     u'params/prior_generator_1/dropout_rate',
     u'params/prior_generator_1/is_frozen',
-    u'checkpoint_initializer_6/prefix',
     u'number_of_towers/prior_generator',
 ]
 
@@ -71,11 +61,9 @@ _ADAPTIVE_GRAPH_NODE = [
     u'zeros/shape_as_tensor',
     u'zeros/Const',
     u'zeros',
-    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/weights',
-    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/biases',
-    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/LeakyRelu',
-    u'Phoenix/prior_generator_0/2_FIXED_CHANNEL_CONVOLUTION_64_13/Conv/biases',
-    u'Phoenix/prior_generator_0/2_FIXED_CHANNEL_CONVOLUTION_64_13/LeakyRelu',
+    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel',
+    u'Phoenix/prior_generator_0/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/bias',
+    u'Phoenix/prior_generator_0/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias',
     u'Phoenix/prior_generator_0/3_PLATE_REDUCTION_FLATTEN_1334/Mean',
     u'Phoenix/prior_generator_0/last_dense_1334/dense/kernel',
     u'Phoenix/prior_generator_0/last_dense_1334/dense/bias',
@@ -84,19 +72,14 @@ _ADAPTIVE_GRAPH_NODE = [
     u'architectures/prior_generator_0',
     u'params/prior_generator_0/dropout_rate',
     u'params/prior_generator_0/is_frozen',
-    u'checkpoint_initializer/prefix',
-    u'checkpoint_initializer/tensor_names',
-    u'Phoenix/prior_generator_1/1_FIXED_CHANNEL_CONVOLUTION_16_1/Conv/weights',
-    u'Phoenix/prior_generator_1/1_FIXED_CHANNEL_CONVOLUTION_16_1/LeakyRelu',
-    u'Phoenix/prior_generator_1/2_FIXED_CHANNEL_CONVOLUTION_64_13/Conv/biases',
-    u'Phoenix/prior_generator_1/2_FIXED_CHANNEL_CONVOLUTION_64_13/LeakyRelu',
+    u'Phoenix/prior_generator_1/1_FIXED_CHANNEL_CONVOLUTION_16_1/conv2d/kernel',
+    u'Phoenix/prior_generator_1/2_FIXED_CHANNEL_CONVOLUTION_64_13/conv2d/bias',
     u'Phoenix/prior_generator_1/3_PLATE_REDUCTION_FLATTEN_1334/Mean',
     u'Phoenix/prior_generator_1/last_dense_1334/logits',
     u'Phoenix/prior_generator_1/last_dense_1334/StopGradient',
     u'architectures/prior_generator_1',
     u'params/prior_generator_1/dropout_rate',
     u'params/prior_generator_1/is_frozen',
-    u'checkpoint_initializer_6/prefix',
     u'number_of_towers/prior_generator',
 ]
 
@@ -242,18 +225,15 @@ class PriorGeneratorTest(parameterized.TestCase, tf.test.TestCase):
       self._create_checkpoint(['search_generator'], 3)
       self._create_checkpoint(['search_generator'], 4)
       self._create_checkpoint(['search_generator'], 5)
-      logits, _ = generator.first_time_chief_generate(
-          features={},
+      towers = generator.first_time_chief_generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.ENSEMBLE_SEARCH,
-          shared_input_tensor=tf.zeros([100, 32, 32, 3]),
-          shared_lengths=None,
           logits_dimension=10,
           hparams={},
           run_config=run_config,
           is_training=True,
           trials=_create_trials(flags.FLAGS.test_tmpdir))
-      self.assertLen(logits, min(width, consider))
+      self.assertLen(towers, min(width, consider))
 
   def test_nonadaptive_prior_graph(self):
     # Force graph mode
@@ -277,18 +257,17 @@ class PriorGeneratorTest(parameterized.TestCase, tf.test.TestCase):
       self._create_checkpoint(['search_generator'], 3)
       self._create_checkpoint(['search_generator'], 4)
       self._create_checkpoint(['search_generator'], 5)
-      logits, _ = generator.first_time_chief_generate(
-          features={},
+      towers = generator.first_time_chief_generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.ENSEMBLE_SEARCH,
-          shared_input_tensor=tf.zeros([100, 32, 32, 3]),
-          shared_lengths=None,
           logits_dimension=10,
           hparams={},
           run_config=run_config,
           is_training=True,
           trials=_create_trials(flags.FLAGS.test_tmpdir))
-      self.assertLen(logits, 2)
+      for t in towers:
+        t(tf.zeros([100, 32, 32, 3]), training=False)
+      self.assertLen(towers, 2)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
@@ -320,19 +299,18 @@ class PriorGeneratorTest(parameterized.TestCase, tf.test.TestCase):
       self._create_checkpoint(['search_generator'], 2)
       self._create_checkpoint(['search_generator'], 3)
       self._create_checkpoint(['search_generator'], 5)
-      logits, _ = generator.first_time_chief_generate(
-          features={},
+      towers = generator.first_time_chief_generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.ENSEMBLE_SEARCH,
-          shared_input_tensor=tf.zeros([100, 32, 32, 3]),
-          shared_lengths=None,
           logits_dimension=10,
           hparams={},
           run_config=run_config,
           is_training=True,
           trials=trial_utils.create_test_trials_intermixed(
               flags.FLAGS.test_tmpdir))
-      self.assertLen(logits, 2)
+      for t in towers:
+        t(tf.zeros([100, 32, 32, 3]), training=False)
+      self.assertLen(towers, 2)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node
@@ -358,18 +336,17 @@ class PriorGeneratorTest(parameterized.TestCase, tf.test.TestCase):
       # Best three trials checkpoint are generated. If the generator chooses
       # the suboptimal (wrong) trials, the test will fail.
       self._create_checkpoint(['prior_generator', 'search_generator'], 5)
-      logits, _ = generator.first_time_chief_generate(
-          features={},
+      towers = generator.first_time_chief_generate(
           input_layer_fn=lambda: None,
           trial_mode=trial_utils.TrialMode.ENSEMBLE_SEARCH,
-          shared_input_tensor=tf.zeros([100, 32, 32, 3]),
-          shared_lengths=None,
           logits_dimension=10,
           hparams={},
           run_config=run_config,
           is_training=True,
           trials=_create_trials(flags.FLAGS.test_tmpdir))
-      self.assertLen(logits, 2)
+      for t in towers:
+        t(tf.zeros([100, 32, 32, 3]), training=False)
+      self.assertLen(towers, 2)
       all_nodes = [
           node.name
           for node in tf.compat.v1.get_default_graph().as_graph_def().node

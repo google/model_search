@@ -4,13 +4,14 @@ package(default_visibility = ["//visibility:public"])
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
-
 py_library(
     name = "base_tower_generator",
     srcs = ["base_tower_generator.py"],
     srcs_version = "PY3",
-    deps = ["//model_search/architecture:architecture_utils"],
+    deps = [
+        "//model_search/architecture:architecture_utils",
+        "//model_search/architecture:tower",
+    ],
 )
 
 py_library(
@@ -75,6 +76,7 @@ py_library(
         "//model_search/proto:all_proto_py_pb2",
         "//model_search:hparam",
         "//model_search/architecture:architecture_utils",
+        "//model_search/architecture:tower",
         "//model_search/generators:base_tower_generator",
         "//model_search/metadata:trial",
     ],
@@ -103,14 +105,16 @@ py_library(
         ":base_tower_generator",
         ":trial_utils",
         "//model_search/proto:all_proto_py_pb2",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
+        "//model_search/architecture:tower",
         "//model_search/search",
     ],
 )
 
 py_test(
     name = "search_candidate_generator_test",
+    size = "large",
     srcs = ["search_candidate_generator_test.py"],
     python_version = "PY3",
     srcs_version = "PY3",

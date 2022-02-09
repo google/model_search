@@ -66,6 +66,20 @@ def valid_decorated_sub_method(foo, bar, baz):
   return foo * bar * baz
 
 
+class TestBase(object):
+  pass
+
+
+@registry.register(TestBase, lookup_name="OUR_TEST", init_args={"a": True})
+class ModifyTest(TestBase):
+
+  def __init__(self, a):
+    self._a = a
+
+  def get_a(self):
+    return self._a
+
+
 class RegisterTest(absltest.TestCase):
 
   def testRegister(self):
@@ -115,6 +129,10 @@ class RegisterTest(absltest.TestCase):
   def test_lookup_all(self):
     sub_registered = registry.lookup_all(DecoratorBase)
     self.assertLen(sub_registered, 2)
+
+  def test_modify_args(self):
+    registry.modify_init_args("OUR_TEST", TestBase, new_init_args={"a": False})
+    self.assertFalse(registry.lookup("OUR_TEST", TestBase).get_a())
 
 
 if __name__ == "__main__":

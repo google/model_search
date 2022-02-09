@@ -32,8 +32,8 @@ exports_files(
 )
 
 py_library(
-    name = "blocks",
-    srcs = ["blocks.py"],
+    name = "block",
+    srcs = ["block.py"],
     srcs_version = "PY3",
     deps = [
         ":hparam",
@@ -44,36 +44,36 @@ py_library(
 )
 
 py_library(
-    name = "blocks_builder",
-    srcs = ["blocks_builder.py"],
+    name = "block_builder",
+    srcs = ["block_builder.py"],
     srcs_version = "PY3",
     deps = [
-        ":blocks",
+        ":block",
         ":registry",
         "//model_search/hparams:hyperparameters",
     ],
 )
 
 py_test(
-    name = "blocks_builder_test",
-    srcs = ["blocks_builder_test.py"],
+    name = "block_builder_test",
+    srcs = ["block_builder_test.py"],
     python_version = "PY3",
     srcs_version = "PY3",
     deps = [
-        ":blocks_builder",
+        ":block_builder",
         "@absl_py//absl/testing:parameterized",
     ],
 )
 
 py_test(
-    name = "blocks_test",
+    name = "block_test",
     size = "large",
-    srcs = ["blocks_test.py"],
+    srcs = ["block_test.py"],
     python_version = "PY3",
     shard_count = 15,
     srcs_version = "PY3",
     deps = [
-        ":blocks",
+        ":block",
         "@absl_py//absl/testing:parameterized",
         "//model_search:hparam",
         "//model_search/architecture:architecture_utils",
@@ -222,7 +222,6 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":controller",
-        ":ensembler",
         ":hparam",
         ":loss_fns",
         ":metric_fns",
@@ -285,9 +284,14 @@ py_library(
     srcs = ["task_manager.py"],
     srcs_version = "PY3",
     deps = [
-        ":blocks_builder",
+        ":block_builder",
+        ":ensembler",
         ":loss_fns",
         "//model_search/architecture:architecture_utils",
+        "//model_search/architecture:tower",
+        "//model_search/generators:base_tower_generator",
+        "//model_search/generators:trial_utils",
+        "//model_search/meta:distillation",
     ],
 )
 
@@ -303,6 +307,7 @@ py_test(
         "//model_search/proto:all_proto_py_pb2",
         "@absl_py//absl/testing:parameterized",
         "//model_search/architecture:architecture_utils",
+        "//model_search/generators:trial_utils",
     ],
 )
 

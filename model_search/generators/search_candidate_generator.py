@@ -20,15 +20,63 @@ import functools
 
 from absl import logging
 
-from model_search import blocks_builder as blocks
+from model_search import block_builder
 from model_search import search
 from model_search.architecture import architecture_utils
+from model_search.architecture import tower
 from model_search.generators import base_tower_generator
 from model_search.generators import trial_utils
 from model_search.proto import phoenix_spec_pb2
 from model_search.proto import transfer_learning_spec_pb2
 import numpy as np
 import tensorflow.compat.v2 as tf
+
+
+
+
+def _suggest_and_create_architecture(create_new_architecture_fn,
+                                     relevant_trials, hparams, my_id,
+                                     run_config, search_algorithm, phoenix_spec,
+                                     input_layer_fn, is_training,
+                                     logits_dimension, dropout_rate, aux):
+  """A function to suggest and create an archiecture.
+
+  Args:
+    create_new_architecture_fn: A function to create the architecture with the
+      following signature  Input architecture, A list of block encoding the
+      architecture. prev_trial, A trial if mutating a previous trial, otherwise
+      None. input_tensor, A tensor with the input. lengths, A tensor with the
+      lengths or None if non-sequential.  Output A list of
+      architecture_utils.TowerSpec, and a list of their architectures
+    relevant_trials: A list of past evaluated trials.
+    hparams: The hparams object for the model.
+    my_id: The currect trial id.
+    run_config: A tf.estimator.RunConfig for the training.
+    search_algorithm: A model_search.search.SearchAlgorithm
+    phoenix_spec: A PhoenixSpec proto.
+    input_layer_fn: A function with the following signature,  Input features, A
+      dict of the features. is_training, A boolean indicating if we are in
+      training mode. scope_name, A string with the scope name,
+      lengths_feature_name, A string holding the lengths feature name for
+      sequential problems, otherwise None.  Output Two tensors. One with the
+      input, and one for lengths for sequential problems (None if
+      non-sequential).
+    is_training: A boolean indicating if we are in training mode.
+    logits_dimension: An int specifying the cardinality of the logits.
+    dropout_rate: The dropout rate between blocks.
+    aux: A boolean indicating if we allow auxiliry head.
+
+  Returns:
+    A list of architecture_utils.TowerSpec, and a list of their architectures
+  """
+  architecture = None
+  input_tensor = None
+  lengths = None
+
+  architecture, prev_trial = search_algorithm.get_suggestion(
+      relevant_trials, hparams, my_id, run_config.model_dir)
+  return create_new_architecture_fn(
+      architecture=architecture, prev_trial=prev_trial)
 
 
 class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
@@ -69,42 +117,24 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
         return trial
     return None
 
-  def _create_new_architecture(self, features, input_layer_fn,
-                               shared_input_tensor, architecture, run_config,
-                               my_id, is_training, shared_lengths, hparams,
-                               logits_dimension, dropout_rate, prev_trial,
-                               trials):
+  def _create_new_architecture(self, architecture, run_config, my_id,
+                               is_training, hparams, logits_dimension,
+                               dropout_rate, prev_trial, trials):
     logging.info("Creating new architecture: ")
     logging.info(architecture)
 
-    input_tensor = shared_input_tensor
-    lengths = shared_lengths
-    if not self._phoenix_spec.is_input_shared:
-      lengths_feature_name = self._phoenix_spec.lengths_feature_name
-      if isinstance(features, dict) and lengths_feature_name not in features:
-        lengths_feature_name = ""
-      input_tensor, lengths = input_layer_fn(
-          features=features,
-          is_training=is_training,
-          scope_name="Phoenix/" + self.generator_name() + "_0/Input",
-          lengths_feature_name=lengths_feature_name)
-
     self._save_architecture(architecture, run_config.model_dir, my_id)
-
-    tower_spec = architecture_utils.construct_tower(
+    tower_ = tower.Tower(
         phoenix_spec=self._phoenix_spec,
-        input_tensor=input_tensor,
         tower_name=self.generator_name() + "_0",
         architecture=architecture,
         is_training=is_training,
-        lengths=lengths,
         logits_dimension=logits_dimension,
         is_frozen=False,
         hparams=hparams,
         model_directory=run_config.model_dir,
         dropout_rate=dropout_rate,
         allow_auxiliary_head=self._allow_auxiliary_head)
-    logits_specs = [tower_spec.logits_spec]
 
     apply_snapshot = (
         self._phoenix_spec.transfer_learning_spec.transfer_learning_type ==
@@ -119,18 +149,19 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
           new_scope="Phoenix/{}_0".format(self.generator_name()))
 
     architecture_utils.set_number_of_towers(self.generator_name(), 1)
-    return logits_specs, [tower_spec.architecture]
+    return [tower_]
 
   def _get_user_suggestion(self, trial_id):
     suggestion = trial_id - 1
     architecture = self._phoenix_spec.user_suggestions[suggestion].architecture
-    architecture = [blocks.BlockType[block_type] for block_type in architecture]
+    architecture = [
+        block_builder.BlockType[block_type] for block_type in architecture
+    ]
     return np.array(
         architecture_utils.fix_architecture_order(
             architecture, self._phoenix_spec.problem_type))
 
-  def first_time_chief_generate(self, features, input_layer_fn, trial_mode,
-                                shared_input_tensor, shared_lengths,
+  def first_time_chief_generate(self, input_layer_fn, trial_mode,
                                 logits_dimension, hparams, run_config,
                                 is_training, trials):
     dropout_rate = getattr(hparams, "dropout_rate", None)
@@ -138,17 +169,27 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
         run_config.model_dir, self._phoenix_spec)
     create_new_architecture_fn = functools.partial(
         self._create_new_architecture,
-        features=features,
-        input_layer_fn=input_layer_fn,
-        shared_input_tensor=shared_input_tensor,
         run_config=run_config,
         my_id=my_id,
         hparams=hparams,
         is_training=is_training,
-        shared_lengths=shared_lengths,
         logits_dimension=logits_dimension,
         dropout_rate=dropout_rate,
         trials=trials)
+
+    suggest_and_create_architecture_fn = functools.partial(
+        _suggest_and_create_architecture,
+        create_new_architecture_fn=create_new_architecture_fn,
+        hparams=hparams,
+        my_id=my_id,
+        run_config=run_config,
+        search_algorithm=self._search_algorithm,
+        phoenix_spec=self._phoenix_spec,
+        input_layer_fn=input_layer_fn,
+        is_training=is_training,
+        logits_dimension=logits_dimension,
+        dropout_rate=dropout_rate,
+        aux=self._allow_auxiliary_head)
 
     # First, try out user suggestions.
     if my_id <= len(self._phoenix_spec.user_suggestions):
@@ -172,10 +213,8 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
           relevant_trials = [
               trial for trial in trials if trial.id >= my_id // every * every
           ]
-        architecture, prev_trial = self._search_algorithm.get_suggestion(
-            relevant_trials, hparams, my_id, run_config.model_dir)
-        return create_new_architecture_fn(
-            architecture=architecture, prev_trial=prev_trial)
+        return suggest_and_create_architecture_fn(
+            relevant_trials=relevant_trials)
 
       # Intermixed ensemble search.
       elif trial_utils.is_intermixed_ensemble_search(self._ensemble_spec):
@@ -188,10 +227,8 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
 
         # Search if this is an exploration trial.
         relevant_trials = [trial for trial in trials if trial.id % every != 0]
-        architecture, prev_trial = self._search_algorithm.get_suggestion(
-            relevant_trials, hparams, my_id, run_config.model_dir)
-        return create_new_architecture_fn(
-            architecture=architecture, prev_trial=prev_trial)
+        return suggest_and_create_architecture_fn(
+            relevant_trials=relevant_trials)
 
       else:
         raise ValueError("Unknown ensemble search type '{}'".format(
@@ -208,29 +245,21 @@ class SearchCandidateGenerator(base_tower_generator.BaseTowerGenerator):
         assert architecture_utils.get_number_of_towers(
             model_dir, self.generator_name()) == 1
         tower_name = self.generator_name() + "_0"
-        tower_spec = architecture_utils.import_tower(
+        tower_ = tower.Tower.load(
             phoenix_spec=self._phoenix_spec,
-            features=features,
-            input_layer_fn=input_layer_fn,
-            shared_input_tensor=shared_input_tensor,
             original_tower_name=tower_name,
             new_tower_name=tower_name,
             model_directory=model_dir,
             new_model_directory=run_config.model_dir,
             is_training=is_training,
             logits_dimension=logits_dimension,
-            shared_lengths=shared_lengths,
-            force_snapshot=False,
             force_freeze=False,
             allow_auxiliary_head=self._allow_auxiliary_head)
         architecture_utils.set_number_of_towers(self.generator_name(), 1)
-        return [tower_spec.logits_spec], [tower_spec.architecture]
+        return [tower_]
 
     # If no ensembling search method is specified, or this is a distillation
     # trial without intermixed ensemble_search, get a new tower based on the
     # architecture search algorithm.
     # This will serve as the student model if distillation occurs on this trial.
-    architecture, prev_trial = self._search_algorithm.get_suggestion(
-        trials, hparams, my_id, run_config.model_dir)
-    return create_new_architecture_fn(
-        architecture=architecture, prev_trial=prev_trial)
+    return suggest_and_create_architecture_fn(relevant_trials=trials)

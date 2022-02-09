@@ -18,7 +18,6 @@
 from absl import logging
 from absl.testing import parameterized
 import mock
-from model_search import blocks_builder as blocks
 from model_search import hparam as hp
 from model_search.metadata import ml_metadata_db
 from model_search.metadata import trial as trial_module
@@ -41,7 +40,9 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
           "testcase_name":
               "increase_size",
           "spec":
-              search_test_utils.create_spec(phoenix_spec_pb2.PhoenixSpec.DNN),
+              search_test_utils.create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.DNN,
+                  blocks_to_use=["FULLY_CONNECTED_PYRAMID"]),
           "init_architecture": [
               "FIXED_CHANNEL_CONVOLUTION_32", "FIXED_CHANNEL_CONVOLUTION_64",
               "CONVOLUTION_3X3"
@@ -59,11 +60,12 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
           "testcase_name":
               "no_completed_trials",
           "spec":
-              search_test_utils.create_spec(phoenix_spec_pb2.PhoenixSpec.DNN),
-          "init_architecture": [
-              "FIXED_CHANNEL_CONVOLUTION_32", "FIXED_CHANNEL_CONVOLUTION_64",
-              "CONVOLUTION_3X3"
-          ],  # np.array([2, 3, 4])
+              search_test_utils.create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.DNN,
+                  min_depth=1,
+                  blocks_to_use=["FULLY_CONNECTED_PYRAMID"]),
+          "init_architecture": ["FIXED_CHANNEL_CONVOLUTION_32",
+                               ],  # np.array([2])
           "completed_trials":
               0,
           "new_block":
@@ -71,14 +73,15 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
           "should_increase_depth":
               False,
           "expected_fork_architecture":
-              np.array([2, 3, 4])
+              np.array([2])
       },
       {
           "testcase_name":
               "custom_depth_thresholds",
           "spec":
-              search_test_utils.create_spec(phoenix_spec_pb2.PhoenixSpec.DNN,
-                                            [1, 2, 3, 4]),
+              search_test_utils.create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.DNN, [1, 2, 3, 4],
+                  blocks_to_use=["FULLY_CONNECTED_PYRAMID"]),
           "init_architecture": [
               "FIXED_CHANNEL_CONVOLUTION_32", "FIXED_CHANNEL_CONVOLUTION_64",
               "CONVOLUTION_3X3"
@@ -96,8 +99,9 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
           "testcase_name":
               "should_increase_depth",
           "spec":
-              search_test_utils.create_spec(phoenix_spec_pb2.PhoenixSpec.DNN,
-                                            [1, 2, 3, 4]),
+              search_test_utils.create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.DNN, [1, 2, 3, 4],
+                  blocks_to_use=["FULLY_CONNECTED_PYRAMID"]),
           "init_architecture": [
               "FIXED_CHANNEL_CONVOLUTION_32", "FIXED_CHANNEL_CONVOLUTION_64",
               "CONVOLUTION_3X3"
@@ -115,8 +119,9 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
           "testcase_name":
               "increase_complexity_probability_eq_zero",
           "spec":
-              search_test_utils.create_spec(phoenix_spec_pb2.PhoenixSpec.DNN,
-                                            [1, 2, 3, 4]),
+              search_test_utils.create_spec(
+                  phoenix_spec_pb2.PhoenixSpec.DNN, [1, 2, 3, 4],
+                  blocks_to_use=["FULLY_CONNECTED_PYRAMID"]),
           "init_architecture": [
               "FIXED_CHANNEL_CONVOLUTION_32", "FIXED_CHANNEL_CONVOLUTION_64",
               "CONVOLUTION_3X3"
@@ -181,9 +186,7 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
       self.assertEqual(fork_trial, completed_trials - 1)
 
     if should_increase_depth:
-      self.assertAllEqual(
-          output_architecture,
-          np.append(expected_fork_architecture, blocks.BlockType[new_block]))
+      self.assertAllEqual(output_architecture[:-1], expected_fork_architecture)
     else:
       self.assertEqual(output_architecture.shape,
                        expected_fork_architecture.shape)
@@ -204,7 +207,9 @@ class CoordinateDescentTest(parameterized.TestCase, tf.test.TestCase):
         3: np.array([10, 11, 12])
     }
     get_architecture.side_effect = lambda idx: trial_to_arch[int(idx)]
-    spec = search_test_utils.create_spec(phoenix_spec_pb2.PhoenixSpec.DNN)
+    spec = search_test_utils.create_spec(
+        phoenix_spec_pb2.PhoenixSpec.DNN,
+        blocks_to_use=["FULLY_CONNECTED_PYRAMID"])
     spec.beam_size = beam_size
     spec.increase_complexity_minimum_trials.append(0)
     algorithm = coordinate_descent.CoordinateDescent(spec, self._metadata)

@@ -34,15 +34,13 @@ import tensorflow.compat.v2 as tf
 from google.protobuf import text_format
 
 
-def _fake_import_tower_one_tower(phoenix_spec, features, input_layer_fn,
-                                 shared_input_tensor, original_tower_name,
+def _fake_import_tower_one_tower(phoenix_spec, original_tower_name,
                                  new_tower_name, model_directory, is_training,
-                                 logits_dimension, shared_lengths,
-                                 new_model_directory, force_snapshot,
+                                 logits_dimension, new_model_directory,
                                  force_freeze, allow_auxiliary_head, output):
-  del phoenix_spec, features, input_layer_fn, shared_input_tensor
-  del model_directory, is_training, logits_dimension, shared_lengths
-  del force_snapshot, force_freeze, allow_auxiliary_head, new_model_directory
+  del phoenix_spec
+  del model_directory, is_training, logits_dimension
+  del force_freeze, allow_auxiliary_head, new_model_directory
   output.update({original_tower_name: new_tower_name})
   return architecture_utils.TowerSpec(None, None, None)
 
@@ -302,7 +300,7 @@ class TrialUtilsTest(parameterized.TestCase, tf.test.TestCase):
               ".set_number_of_towers")
   @mock.patch("model_search.architecture.architecture_utils"
               ".get_number_of_towers")
-  @mock.patch("model_search.architecture.architecture_utils" ".import_tower")
+  @mock.patch("model_search.architecture.tower.Tower.load")
   def test_import_one_model(self, import_tower, get_num_towers, set_towers):
     get_num_towers.side_effect = [1, 2, 1]
     output = {}
@@ -312,11 +310,7 @@ class TrialUtilsTest(parameterized.TestCase, tf.test.TestCase):
     set_towers.side_effect = functools.partial(
         _fake_set_num_towers, output=set_output)
     trial_utils.import_towers_one_trial(
-        features=None,
-        input_layer_fn=None,
         phoenix_spec=None,
-        shared_input_tensor=None,
-        shared_lengths=None,
         is_training=None,
         logits_dimension=None,
         prev_model_dir="1",
@@ -339,7 +333,7 @@ class TrialUtilsTest(parameterized.TestCase, tf.test.TestCase):
 
   @mock.patch("model_search.architecture.architecture_utils"
               ".set_number_of_towers")
-  @mock.patch("model_search.architecture.architecture_utils" ".import_tower")
+  @mock.patch("model_search.architecture.tower.Tower.load")
   def test_import_multiple(self, import_tower, set_towers):
     output = {}
     set_output = {}
@@ -348,11 +342,7 @@ class TrialUtilsTest(parameterized.TestCase, tf.test.TestCase):
     set_towers.side_effect = functools.partial(
         _fake_set_num_towers, output=set_output)
     trial_utils.import_towers_multiple_trials(
-        features=None,
-        input_layer_fn=None,
         phoenix_spec=None,
-        shared_input_tensor=None,
-        shared_lengths=None,
         is_training=None,
         logits_dimension=None,
         previous_model_dirs=["1", "2"],

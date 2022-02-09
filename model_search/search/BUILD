@@ -7,8 +7,6 @@ package(default_visibility = [
 
 licenses(["notice"])
 
-exports_files(["LICENSE"])
-
 py_library(
     name = "search",
     srcs = ["__init__.py"],
@@ -29,7 +27,7 @@ py_library(
     srcs = ["common.py"],
     srcs_version = "PY3",
     deps = [
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
     ],
 )
@@ -52,7 +50,7 @@ py_library(
     srcs_version = "PY3",
     deps = [
         ":search_algorithm",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
     ],
 )
@@ -79,7 +77,7 @@ py_library(
     deps = [
         ":common",
         ":search_algorithm",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
     ],
 )
@@ -94,7 +92,7 @@ py_test(
         ":test_utils",
         "//model_search/proto:all_proto_py_pb2",
         "@absl_py//absl/testing:parameterized",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search:hparam",
         "//model_search/metadata:ml_metadata_db",
         "//model_search/metadata:trial",
@@ -109,7 +107,7 @@ py_library(
         ":common",
         ":search_algorithm",
         "//model_search/proto:all_proto_py_pb2",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
     ],
 )
@@ -126,7 +124,7 @@ py_test(
         ":test_utils",
         "//model_search/proto:all_proto_py_pb2",
         "@absl_py//absl/testing:parameterized",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search:hparam",
         "//model_search/metadata:trial",
     ],
@@ -139,7 +137,7 @@ py_library(
     deps = [
         ":common",
         ":search_algorithm",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
     ],
 )
@@ -167,7 +165,7 @@ py_library(
     deps = [
         ":common",
         ":search_algorithm",
-        "//model_search:blocks_builder",
+        "//model_search:block_builder",
         "//model_search/architecture:architecture_utils",
     ],
 )
@@ -194,7 +192,7 @@ py_library(
     deps = [
         ":common",
         ":search_algorithm",
-        "//model_search:blocks",
+        "//model_search:block",
         "//model_search/architecture:architecture_utils",
     ],
 )
