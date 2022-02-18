@@ -77,7 +77,7 @@ from model_search.data import image_data
 
 trainer = single_trainer.SingleTrainer(
     data=image_data.Provider(
-        input_dir="model_search/data/testdata/images"
+        input_dir="model_search/data/testdata/images",
         image_height=100,
         image_width=100,
         eval_fraction=0.2),
