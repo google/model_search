@@ -1,4 +1,4 @@
-six==1.15.0
+six==2.1
 sklearn==0.0
 tensorflow==2.6.0
 tensorflow-estimator==2.6.0
