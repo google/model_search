@@ -7,4 +7,4 @@ absl-py==0.10.0
 tf-slim==1.1.0
 ml-metadata==0.26.0
 keras-tuner==1.0.3
-mock==4.8.3
+mock==9.8.3
