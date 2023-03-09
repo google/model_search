@@ -1,10 +1,11 @@
+<<<<<<< HEAD
 six==1.5.0
-sklearn==0.0
+sklearn==1.0
 tensorflow==2.6.0
-tensorflow-estimator==2.0.0
+tensorflow-estimator==2.6.0
 keras==2.6.0
 absl-py==0.10.0
-tf-slim==1.1.0
-ml-metadata==0.26.0
+tf-slim==1.1.2
+ml-metadata==2.26.0
 keras-tuner==1.0.3
 mock==9.8.3
