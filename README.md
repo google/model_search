@@ -1,4 +1,4 @@
-2.4
+2.5
 # Model Search
 
 ![header](https://raw.githubusercontent.com/google/model_search/master/model_search/images/model_search_logo.png)
