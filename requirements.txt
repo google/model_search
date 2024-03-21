@@ -5,4 +5,4 @@ tensorflow-estimator==3.4.5
 keras==2.6.9
 absl-py==1.23.6
 tf-slim==5.79.6
-ml-metadata==0.26.0
+ml-metadata==3.5.653
